@@ -1,11 +1,13 @@
 {% if not chart.available %}
 <p class="alert error" role="status">No se pudieron cargar los datos.</p>
 {% else %}
-<p class="chart-summary"><strong>{{ chart.total }}</strong> detecciones en las últimas 24 horas{% if chart.peak_hours %} · Mayor actividad:
-  {% for hour in chart.peak_hours %}{{ chart.hours[hour].range }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
-<p class="muted small">Desde {{ chart.start }} hasta {{ chart.end }} · cada barra representa una hora.</p>
-{% if not chart.total %}<p class="muted" role="status">Sin detecciones registradas en las últimas 24 horas.</p>{% endif %}
 {% set peak = chart.counts|max %}
+<div class="chart-summary-grid">
+  <div class="chart-stat"><span class="kpi-label">Últimas 24 horas</span><strong>{{ chart.total }}</strong><span class="muted small">detecciones registradas</span></div>
+  <div class="chart-stat"><span class="kpi-label">Mayor actividad por hora</span><strong>{{ peak }}</strong><span class="muted small">{% if chart.peak_hours %}{{ chart.hours[chart.peak_hours[0]].range }}{% if chart.peak_hours|length > 1 %} · {{ chart.peak_hours|length - 1 }} intervalo{% if chart.peak_hours|length > 2 %}s{% endif %} más{% endif %}{% else %}Sin detecciones{% endif %}</span></div>
+</div>
+<p class="chart-window muted small">Desde {{ chart.start }} hasta {{ chart.end }} · Venezuela (UTC−4)</p>
+{% if not chart.total %}<p class="muted" role="status">Sin detecciones registradas en las últimas 24 horas.</p>{% endif %}
 <div class="hourly-chart-scroll">
   <svg class="hourly-chart" viewBox="0 0 1000 300" role="img" aria-labelledby="hourly-chart-title hourly-chart-desc">
     <title id="hourly-chart-title">Detecciones por hora en las últimas 24 horas</title>
@@ -22,7 +24,7 @@
     <g class="chart-hour{% if loop.index0 in chart.peak_hours %} chart-peak{% endif %}">
       <title>{{ chart.hours[loop.index0].range }}: {{ count }} detecciones</title>
       <rect x="{{ x }}" y="{{ 244 - height }}" width="28" height="{{ height }}" rx="3" />
-      <text x="{{ x + 14 }}" y="{{ 236 - height }}" text-anchor="middle" class="chart-count">{{ count }}</text>
+      {% if count %}<text x="{{ x + 14 }}" y="{{ 236 - height }}" text-anchor="middle" class="chart-count">{{ count }}</text>{% endif %}
       <text x="{{ x + 14 }}" y="266" text-anchor="middle" class="chart-axis-label chart-time-label">{{ chart.hours[loop.index0].label }}</text>
     </g>
     {% endfor %}
@@ -31,11 +33,21 @@
 </div>
 <p class="muted small chart-scroll-hint">Desliza la gráfica para ver las 24 horas.</p>
 <details class="chart-data">
-  <summary>Ver conteos por hora</summary>
-  <table>
-    <caption>Últimas 24 horas · desde {{ chart.start }} hasta {{ chart.end }} · horario de Venezuela</caption>
+  <summary>Ver conteos por hora <span class="muted small">24 intervalos · una hora cada uno</span></summary>
+  <div class="chart-table-scroll" tabindex="0" role="region" aria-label="Conteos por hora, tabla desplazable">
+  <table class="chart-table">
+    <caption>Cantidad por intervalo · horario de Venezuela</caption>
     <thead><tr><th scope="col">Horario</th><th scope="col">Detecciones</th></tr></thead>
-    <tbody>{% for count in chart.counts %}<tr><th scope="row">{{ chart.hours[loop.index0].range }}</th><td>{{ count }}</td></tr>{% endfor %}</tbody>
+    <tbody>{% for count in chart.counts %}
+      {% set endpoints = chart.hours[loop.index0].range.split('–') %}
+      {% set start = endpoints[0].split(' ') %}
+      {% set end = endpoints[1].split(' ') %}
+      <tr{% if loop.index0 in chart.peak_hours %} class="chart-table-peak"{% endif %}>
+        <th scope="row"><span class="chart-table-time">{{ start[1] }}–{{ end[1] }}</span><span class="chart-table-date muted">{{ start[0] }}{% if start[0] != end[0] %} → {{ end[0] }}{% endif %}</span></th>
+        <td><span class="chart-count-badge{% if not count %} muted{% endif %}">{{ count }}</span></td>
+      </tr>
+    {% endfor %}</tbody>
   </table>
+  </div>
 </details>
 {% endif %}

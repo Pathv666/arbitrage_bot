@@ -134,7 +134,8 @@ def test_grafica_ventana_movil_publica_y_limpieza(authed, env, chart_clock):
     anonymous = TestClient(create_app())
     response = anonymous.get("/partials/opportunities-chart")
     assert response.status_code == 200
-    assert "<strong>1</strong> detecciones en las últimas 24 horas" in response.text
+    assert "<strong>1</strong>" in response.text
+    assert "detecciones registradas" in response.text
     assert "14/10 11:37–14/10 12:37: 1 detecciones" in response.text
     assert response.text.count('<g class="chart-hour') == 24
     assert "Ver conteos por hora" in response.text
