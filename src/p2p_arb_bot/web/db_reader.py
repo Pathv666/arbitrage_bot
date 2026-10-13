@@ -16,12 +16,65 @@ import logging
 import os
 import sqlite3
 from collections import deque
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from ..domain.arbitrage import suggested_trade
 
 logger = logging.getLogger(__name__)
+
+# Horario venezolano para la gráfica; independiente de la zona del servidor.
+VENEZUELA_TZ = timezone(timedelta(hours=-4), name="America/Caracas")
+
+
+def opportunities_by_hour(db_path: str, day: date) -> dict:
+    """Cuenta detecciones del día venezolano, sin limitar al historial reciente."""
+    start = datetime.combine(day, time.min, tzinfo=VENEZUELA_TZ)
+    end = start + timedelta(days=1)
+    lower = (start.astimezone(timezone.utc) - timedelta(days=1)).date().isoformat()
+    upper = (end.astimezone(timezone.utc) + timedelta(days=1)).date().isoformat()
+    result = {
+        "day": day.isoformat(), "counts": [0] * 24, "total": 0,
+        "peak_hours": [], "available": True,
+    }
+    conn = None
+    try:
+        conn = _connect_ro(db_path)
+        if conn is None:
+            return result
+        # Prefiltro indexado con margen para timestamps con otros offsets.
+        # La comparación final en Python conserva la precisión de microsegundos.
+        rows = conn.execute(
+            """
+            SELECT detected_at
+            FROM opportunities
+            WHERE detected_at >= ? AND detected_at < ?
+            """,
+            (lower, upper),
+        )
+        for row in rows:
+            try:
+                detected = datetime.fromisoformat(row["detected_at"])
+                if detected.tzinfo is None:
+                    detected = detected.replace(tzinfo=timezone.utc)
+                local = detected.astimezone(VENEZUELA_TZ)
+            except (ValueError, TypeError, OverflowError):
+                continue
+            if start <= local < end:
+                result["counts"][local.hour] += 1
+        result["total"] = sum(result["counts"])
+        peak = max(result["counts"])
+        result["peak_hours"] = [
+            hour for hour, count in enumerate(result["counts"])
+            if peak > 0 and count == peak
+        ]
+    except sqlite3.Error as exc:
+        logger.warning("Error leyendo detecciones por hora: %s", exc)
+        result["available"] = False
+    finally:
+        if conn is not None:
+            conn.close()
+    return result
 
 
 def _dec(value: object) -> Decimal:

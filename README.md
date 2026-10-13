@@ -109,6 +109,11 @@ Qué ofrece:
 - **Supervisar** (público): estado del bot (corriendo/detenido + uptime), mejor
   spread neto actual, oportunidades de las últimas 24 h, profit estimado, tabla de
   oportunidades recientes y las últimas líneas del log. Todo se auto-refresca.
+- **Historial diario** (público): gráfica con detecciones por hora, selector de
+  fecha y total del día, en horario de Venezuela (UTC−4). Se actualiza cada 30 s
+  y cuenta todos los registros guardados, incluidas nuevas detecciones de una
+  oportunidad persistente. Limpiar las oportunidades también vacía este historial;
+  las horas sin registros pueden corresponder al monitor apagado.
 - **Ejecutar** (login): botones de arrancar / parar / reiniciar. El dashboard
   gestiona el bot como subproceso.
 - **Configurar** (login): edita los parámetros clave (umbral %, monto máx USDT,

@@ -97,6 +97,60 @@ def test_dashboard_renders_with_empty_db(client):
     assert "Aún no se han registrado oportunidades" in r.text
 
 
+def test_grafica_dashboard_hoy_venezuela(client, monkeypatch):
+    from p2p_arb_bot.web import app as web_app
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 10, 14, 2, tzinfo=timezone.utc).astimezone(tz)
+
+    monkeypatch.setattr(web_app, "datetime", FixedDatetime)
+    body = client.get("/").text
+    assert 'id="chart-date" name="date" value="2026-10-13"' in body
+    assert 'hx-trigger="every 30s, refresh" hx-include="#chart-date"' in body
+    assert body.index("Última oportunidad detectada") < body.index("Oportunidades por hora") < body.index("Oportunidades recientes")
+    body = client.get("/partials/opportunities-chart").text
+    assert "Detecciones por hora del 2026-10-13" in body
+
+
+def test_grafica_fecha_elegida_publica_y_limpieza(client, authed, env):
+    import sqlite3
+    _seed_opportunity(str(env / "opps.db"))
+    with sqlite3.connect(env / "opps.db") as conn:
+        conn.execute("UPDATE opportunities SET detected_at = '2026-10-13T16:30:00+00:00'")
+    # Cliente sin sesión para verificar que la supervisión sigue siendo pública.
+    anonymous = TestClient(create_app())
+    response = anonymous.get("/partials/opportunities-chart?date=2026-10-13")
+    assert response.status_code == 200
+    assert "<strong>1</strong> detecciones el 2026-10-13" in response.text
+    assert "12:00–13:00: 1 detecciones" in response.text
+    assert response.text.count('<g class="chart-hour') == 24
+    assert "Ver conteos por hora" in response.text
+    assert anonymous.get("/partials/opportunities-chart?date=2026-10-12").status_code == 200
+    assert "Sin detecciones registradas" in anonymous.get("/partials/opportunities-chart?date=2026-10-12").text
+    assert "htmx.trigger('#opportunities-chart','refresh')" in authed.get("/").text
+    assert authed.post("/opportunities/clear").status_code == 200
+    assert "Sin detecciones registradas" in anonymous.get("/partials/opportunities-chart?date=2026-10-13").text
+
+
+@pytest.mark.parametrize("day", ["invalida", "2026-02-30", "20261013", "", "9999-12-31", "0001-01-01"])
+def test_grafica_rechaza_fechas_invalidas(client, day):
+    assert client.get("/partials/opportunities-chart", params={"date": day}).status_code == 422
+
+
+def test_grafica_base_ausente_y_error_sqlite(client, env):
+    response = client.get("/partials/opportunities-chart?date=2026-10-13")
+    assert response.status_code == 200
+    assert "Sin detecciones registradas para este día" in response.text
+    assert not (env / "opps.db").exists()
+    (env / "opps.db").write_text("base dañada")
+    response = client.get("/partials/opportunities-chart?date=2026-10-13")
+    assert response.status_code == 200
+    assert "No se pudieron cargar los datos" in response.text
+    assert "Sin detecciones registradas" not in response.text
+
+
 @pytest.mark.parametrize("route", ["/", "/partials/status"])
 def test_resumen_publico_muestra_configuracion_con_bot_detenido(client, monkeypatch, route):
     monkeypatch.setenv("ASSETS", "USDT,BTC")

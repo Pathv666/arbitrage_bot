@@ -31,6 +31,24 @@
   </div>
 </section>
 
+<section class="card" aria-labelledby="chart-heading">
+  <div class="card-head chart-head">
+    <div><h2 id="chart-heading">Oportunidades por hora</h2><span class="muted small">Horario de Venezuela · UTC−4 · actualización cada 30 s</span></div>
+    <label for="chart-date">Día
+      <input type="date" id="chart-date" name="date" value="{{ chart.day }}"
+             hx-get="/partials/opportunities-chart" hx-trigger="change"
+             hx-target="#opportunities-chart" hx-include="this"
+             hx-sync="#opportunities-chart:replace">
+    </label>
+  </div>
+  <div id="opportunities-chart" hx-get="/partials/opportunities-chart"
+       hx-trigger="every 30s, refresh" hx-include="#chart-date"
+       hx-sync="this:replace" hx-swap="innerHTML">
+    {% include "partials/opportunities_chart.html" %}
+  </div>
+  <p class="muted small">Se cuentan detecciones guardadas de todas las monedas y métodos de pago. Una oportunidad persistente puede registrarse de nuevo. Las horas sin registros también pueden corresponder al monitor apagado.</p>
+</section>
+
 <section class="card">
   <div class="card-head">
     <h2 id="opportunities-heading" tabindex="-1">Oportunidades recientes</h2>
@@ -42,7 +60,7 @@
               hx-target="#opportunities"
               hx-swap="innerHTML"
               hx-confirm="¿Borrar todas las oportunidades registradas? Esta acción no se puede deshacer."
-              hx-on::after-request="htmx.trigger('#status-panel','refresh'); htmx.trigger('#trade-amount','refresh')">Limpiar</button>
+              hx-on::after-request="htmx.trigger('#status-panel','refresh'); htmx.trigger('#trade-amount','refresh'); htmx.trigger('#opportunities-chart','refresh')">Limpiar</button>
       {% endif %}
     </div>
   </div>

@@ -62,6 +62,23 @@ body {
 .card-head h2 { margin: 0; font-size: 1rem; }
 .card-head-actions { display: flex; align-items: center; gap: .6rem; }
 
+/* Historial diario de detecciones en horario venezolano. */
+.chart-head { flex-wrap:wrap; gap:12px; }
+.chart-head label { display:flex; align-items:center; gap:8px; }
+.chart-head input { color-scheme:dark; }
+.chart-summary { font-variant-numeric:tabular-nums; }
+.hourly-chart-scroll { overflow-x:auto; scrollbar-color:var(--border) var(--panel); }
+.hourly-chart { display:block; width:100%; min-width:840px; }
+.chart-grid { stroke:var(--border); }
+.chart-axis-label { fill:var(--muted); font-size:14px; }
+.chart-count { fill:var(--text); font-size:14px; }
+.chart-hour rect { fill:var(--accent); }
+.chart-peak rect { fill:var(--pos); }
+.chart-data summary { cursor:pointer; color:var(--muted); }
+.chart-data table { margin-top:12px; }
+.chart-scroll-hint { display:none; }
+@media (max-width:900px) { .chart-scroll-hint { display:block; } }
+
 
 .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.2rem; }
 .kpi { display: flex; flex-direction: column; gap: .35rem; margin: 0; }
