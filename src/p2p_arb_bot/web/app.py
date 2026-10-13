@@ -9,11 +9,10 @@ from __future__ import annotations
 
 import os
 import secrets
-from datetime import date, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, Form, HTTPException, Query, Request
+from fastapi import FastAPI, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -111,8 +110,7 @@ def create_app() -> FastAPI:
             "stats": db_reader.stats_24h(p["db_path"]),
             "status": db_reader.read_status(p["status_path"]),
             "opportunities": db_reader.recent_opportunities(p["db_path"], limit=50),
-            "chart": db_reader.opportunities_by_hour(
-                p["db_path"], datetime.now(db_reader.VENEZUELA_TZ).date()),
+            "chart": db_reader.opportunities_by_hour(p["db_path"]),
         }
 
     def _bot_view() -> dict:
@@ -151,22 +149,8 @@ def create_app() -> FastAPI:
         return _TEMPLATES.TemplateResponse(request, "partials/opportunities.html", ctx)
 
     @app.get("/partials/opportunities-chart", response_class=HTMLResponse)
-    def partial_opportunities_chart(
-        request: Request,
-        selected_date: str | None = Query(None, alias="date"),
-    ) -> HTMLResponse:
-        day = datetime.now(db_reader.VENEZUELA_TZ).date()
-        if selected_date is not None:
-            try:
-                day = date.fromisoformat(selected_date)
-                if day.isoformat() != selected_date:
-                    raise ValueError
-            except ValueError:
-                raise HTTPException(422, "Fecha inválida; usa YYYY-MM-DD")
-        try:
-            chart = db_reader.opportunities_by_hour(_paths()["db_path"], day)
-        except OverflowError:
-            raise HTTPException(422, "Fecha fuera del rango admitido")
+    def partial_opportunities_chart(request: Request) -> HTMLResponse:
+        chart = db_reader.opportunities_by_hour(_paths()["db_path"])
         return _TEMPLATES.TemplateResponse(
             request, "partials/opportunities_chart.html",
             {"request": request, "chart": chart},

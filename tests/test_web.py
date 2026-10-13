@@ -10,7 +10,7 @@ import asyncio
 import json
 import os
 import sqlite3
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -179,26 +179,40 @@ def test_status_notifier_records_last_opportunity(tmp_path):
 
 # --- db_reader --------------------------------------------------------------
 
-def test_detecciones_por_hora_limites_venezuela_y_offsets(tmp_path):
+def test_detecciones_por_hora_ventana_movil_limites_y_offsets(tmp_path):
     db = tmp_path / "opps.db"
+    now = datetime(2026, 10, 14, 19, 37, tzinfo=timezone.utc)
     stamps = [
-        "2026-10-13T03:59:59.999999+00:00",  # día anterior
-        "2026-10-13T04:00:00+00:00",         # medianoche
-        "2026-10-13T00:30:00-04:00",         # mismo día con offset
-        "2026-10-13T05:00:00",              # legado sin zona: UTC
-        "2026-10-14T03:59:59.999999+00:00",  # último instante del día
-        "2026-10-14T04:00:00+00:00",         # día siguiente
+        "2026-10-13T19:36:59.999999+00:00",  # anterior a las 24 horas
+        "2026-10-13T19:37:00+00:00",         # inicio exacto
+        "2026-10-13T15:45:00-04:00",         # primer intervalo con offset
+        "2026-10-13T20:37:00",              # siguiente intervalo, legado UTC
+        "2026-10-14T04:00:00+00:00",         # cruce de medianoche en Venezuela
+        "2026-10-14T19:36:59.999999+00:00",  # último intervalo
+        "2026-10-14T19:37:00+00:00",         # instante actual
+        "2026-10-14T19:37:00.000001+00:00",  # futuro, se excluye
         "2026-10-13-dato-invalido",
     ]
     _seed_db(str(db), net_pcts=[1.0] * len(stamps))
     with sqlite3.connect(db) as conn:
         conn.executemany("UPDATE opportunities SET detected_at = ? WHERE id = ?",
                          [(stamp, i + 1) for i, stamp in enumerate(stamps)])
-    chart = db_reader.opportunities_by_hour(str(db), date(2026, 10, 13))
+    chart = db_reader.opportunities_by_hour(str(db), now)
     assert chart["available"]
-    assert chart["total"] == 4
-    assert chart["counts"] == [2, 1] + [0] * 21 + [1]
-    assert chart["peak_hours"] == [0]
+    assert chart["total"] == 6
+    expected = [0] * 24
+    expected[0], expected[1], expected[8], expected[23] = 2, 1, 1, 2
+    assert chart["counts"] == expected
+    assert chart["peak_hours"] == [0, 23]
+    assert chart["start"] == "13/10/2026 15:37:00"
+    assert chart["end"] == "14/10/2026 15:37:00"
+    assert chart["hours"][0]["label"] == "15:37"
+    assert chart["hours"][-1]["range"] == "14/10 14:37–14/10 15:37"
+    # Al avanzar una hora, los registros del primer intervalo salen de la ventana.
+    shifted = db_reader.opportunities_by_hour(str(db), now + timedelta(hours=1))
+    assert shifted["total"] == 5
+    assert shifted["counts"][0] == 1
+    assert shifted["hours"][0]["label"] == "16:37"
 
 
 def test_detecciones_por_hora_sin_limite_y_empate(tmp_path):
@@ -207,18 +221,19 @@ def test_detecciones_por_hora_sin_limite_y_empate(tmp_path):
     with sqlite3.connect(db) as conn:
         conn.execute("UPDATE opportunities SET detected_at = '2026-10-13T14:00:00+00:00' WHERE id <= 60")
         conn.execute("UPDATE opportunities SET detected_at = '2026-10-13T15:00:00+00:00' WHERE id > 60")
-    chart = db_reader.opportunities_by_hour(str(db), date(2026, 10, 13))
+    now = datetime(2026, 10, 14, 4, tzinfo=timezone.utc)
+    chart = db_reader.opportunities_by_hour(str(db), now)
     assert chart["total"] == 120
     assert chart["counts"][10:12] == [60, 60]
     assert chart["peak_hours"] == [10, 11]
-    empty = db_reader.opportunities_by_hour(str(db), date(2026, 10, 12))
+    empty = db_reader.opportunities_by_hour(str(db), now - timedelta(days=1))
     assert empty["counts"] == [0] * 24
     assert empty["peak_hours"] == []
 
 
 def test_detecciones_por_hora_base_ausente_no_la_crea(tmp_path):
     db = tmp_path / "missing.db"
-    chart = db_reader.opportunities_by_hour(str(db), date(2026, 10, 13))
+    chart = db_reader.opportunities_by_hour(str(db))
     assert chart["available"] and chart["total"] == 0
     assert not db.exists()
 
@@ -226,7 +241,7 @@ def test_detecciones_por_hora_base_ausente_no_la_crea(tmp_path):
 def test_detecciones_por_hora_error_sqlite_no_finge_dia_vacio(tmp_path):
     db = tmp_path / "broken.db"
     db.write_text("no es una base SQLite")
-    chart = db_reader.opportunities_by_hour(str(db), date(2026, 10, 13))
+    chart = db_reader.opportunities_by_hour(str(db))
     assert not chart["available"]
 
 
@@ -234,8 +249,9 @@ def test_detecciones_por_hora_base_bloqueada(monkeypatch):
     def locked(_path):
         raise sqlite3.OperationalError("database is locked")
     monkeypatch.setattr(db_reader, "_connect_ro", locked)
-    chart = db_reader.opportunities_by_hour("opps.db", date(2026, 10, 13))
+    chart = db_reader.opportunities_by_hour("opps.db")
     assert not chart["available"]
+
 
 def _seed_db(path: str, *, net_pcts: list[float]) -> None:
     repo = SQLiteRepository(path)

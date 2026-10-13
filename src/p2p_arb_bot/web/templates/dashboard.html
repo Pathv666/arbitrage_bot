@@ -33,16 +33,10 @@
 
 <section class="card" aria-labelledby="chart-heading">
   <div class="card-head chart-head">
-    <div><h2 id="chart-heading">Oportunidades por hora</h2><span class="muted small">Horario de Venezuela · UTC−4 · actualización cada 30 s</span></div>
-    <label for="chart-date">Día
-      <input type="date" id="chart-date" name="date" value="{{ chart.day }}"
-             hx-get="/partials/opportunities-chart" hx-trigger="change"
-             hx-target="#opportunities-chart" hx-include="this"
-             hx-sync="#opportunities-chart:replace">
-    </label>
+    <div><h2 id="chart-heading">Oportunidades por hora · últimas 24 horas</h2><span class="muted small">Horario de Venezuela · UTC−4 · actualización cada 30 s</span></div>
   </div>
   <div id="opportunities-chart" hx-get="/partials/opportunities-chart"
-       hx-trigger="every 30s, refresh" hx-include="#chart-date"
+       hx-trigger="every 30s, refresh"
        hx-sync="this:replace" hx-swap="innerHTML">
     {% include "partials/opportunities_chart.html" %}
   </div>

@@ -1,13 +1,14 @@
 {% if not chart.available %}
 <p class="alert error" role="status">No se pudieron cargar los datos.</p>
 {% else %}
-<p class="chart-summary"><strong>{{ chart.total }}</strong> detecciones el {{ chart.day }}{% if chart.peak_hours %} · Mayor actividad:
-  {% for hour in chart.peak_hours %}{{ '%02d'|format(hour) }}:00–{{ '%02d'|format(hour + 1) }}:00{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
-{% if not chart.total %}<p class="muted" role="status">Sin detecciones registradas para este día.</p>{% endif %}
+<p class="chart-summary"><strong>{{ chart.total }}</strong> detecciones en las últimas 24 horas{% if chart.peak_hours %} · Mayor actividad:
+  {% for hour in chart.peak_hours %}{{ chart.hours[hour].range }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+<p class="muted small">Desde {{ chart.start }} hasta {{ chart.end }} · cada barra representa una hora.</p>
+{% if not chart.total %}<p class="muted" role="status">Sin detecciones registradas en las últimas 24 horas.</p>{% endif %}
 {% set peak = chart.counts|max %}
 <div class="hourly-chart-scroll">
   <svg class="hourly-chart" viewBox="0 0 1000 300" role="img" aria-labelledby="hourly-chart-title hourly-chart-desc">
-    <title id="hourly-chart-title">Detecciones por hora del {{ chart.day }}</title>
+    <title id="hourly-chart-title">Detecciones por hora en las últimas 24 horas</title>
     <desc id="hourly-chart-desc">{{ chart.total }} detecciones en horario de Venezuela. Los valores exactos están en la tabla desplegable.</desc>
     <text x="44" y="16" class="chart-axis-label">Detecciones</text>
     {% for tick in ([0, peak // 2, peak] if peak > 1 else [0, 1]) %}
@@ -19,10 +20,10 @@
     {% set x = 50 + loop.index0 * 39 %}
     {% set height = count / (peak or 1) * 196 %}
     <g class="chart-hour{% if loop.index0 in chart.peak_hours %} chart-peak{% endif %}">
-      <title>{{ '%02d'|format(loop.index0) }}:00–{{ '%02d'|format(loop.index) }}:00: {{ count }} detecciones</title>
+      <title>{{ chart.hours[loop.index0].range }}: {{ count }} detecciones</title>
       <rect x="{{ x }}" y="{{ 244 - height }}" width="28" height="{{ height }}" rx="3" />
       <text x="{{ x + 14 }}" y="{{ 236 - height }}" text-anchor="middle" class="chart-count">{{ count }}</text>
-      <text x="{{ x + 14 }}" y="266" text-anchor="middle" class="chart-axis-label">{{ '%02d'|format(loop.index0) }}</text>
+      <text x="{{ x + 14 }}" y="266" text-anchor="middle" class="chart-axis-label chart-time-label">{{ chart.hours[loop.index0].label }}</text>
     </g>
     {% endfor %}
     <text x="994" y="291" text-anchor="end" class="chart-axis-label">Hora (UTC−4)</text>
@@ -32,9 +33,9 @@
 <details class="chart-data">
   <summary>Ver conteos por hora</summary>
   <table>
-    <caption>Detecciones del {{ chart.day }} · horario de Venezuela</caption>
+    <caption>Últimas 24 horas · desde {{ chart.start }} hasta {{ chart.end }} · horario de Venezuela</caption>
     <thead><tr><th scope="col">Horario</th><th scope="col">Detecciones</th></tr></thead>
-    <tbody>{% for count in chart.counts %}<tr><th scope="row">{{ '%02d'|format(loop.index0) }}:00–{{ '%02d'|format(loop.index) }}:00</th><td>{{ count }}</td></tr>{% endfor %}</tbody>
+    <tbody>{% for count in chart.counts %}<tr><th scope="row">{{ chart.hours[loop.index0].range }}</th><td>{{ count }}</td></tr>{% endfor %}</tbody>
   </table>
 </details>
 {% endif %}

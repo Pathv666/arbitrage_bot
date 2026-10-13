@@ -16,7 +16,7 @@ import logging
 import os
 import sqlite3
 from collections import deque
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from ..domain.arbitrage import suggested_trade
@@ -27,14 +27,28 @@ logger = logging.getLogger(__name__)
 VENEZUELA_TZ = timezone(timedelta(hours=-4), name="America/Caracas")
 
 
-def opportunities_by_hour(db_path: str, day: date) -> dict:
-    """Cuenta detecciones del día venezolano, sin limitar al historial reciente."""
-    start = datetime.combine(day, time.min, tzinfo=VENEZUELA_TZ)
-    end = start + timedelta(days=1)
+def opportunities_by_hour(db_path: str, now: datetime | None = None) -> dict:
+    """Cuenta las últimas 24 h en intervalos de una hora, del más antiguo al actual."""
+    end = now if now is not None else datetime.now(timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    end = end.astimezone(VENEZUELA_TZ)
+    start = end - timedelta(hours=24)
     lower = (start.astimezone(timezone.utc) - timedelta(days=1)).date().isoformat()
     upper = (end.astimezone(timezone.utc) + timedelta(days=1)).date().isoformat()
+    hours = []
+    for hour in range(24):
+        interval_start = start + timedelta(hours=hour)
+        interval_end = interval_start + timedelta(hours=1)
+        hours.append({
+            "label": interval_start.strftime("%H:%M"),
+            "range": (interval_start.strftime("%d/%m %H:%M") + "–"
+                      + interval_end.strftime("%d/%m %H:%M")),
+        })
     result = {
-        "day": day.isoformat(), "counts": [0] * 24, "total": 0,
+        "start": start.strftime("%d/%m/%Y %H:%M:%S"),
+        "end": end.strftime("%d/%m/%Y %H:%M:%S"),
+        "hours": hours, "counts": [0] * 24, "total": 0,
         "peak_hours": [], "available": True,
     }
     conn = None
@@ -60,8 +74,10 @@ def opportunities_by_hour(db_path: str, day: date) -> dict:
                 local = detected.astimezone(VENEZUELA_TZ)
             except (ValueError, TypeError, OverflowError):
                 continue
-            if start <= local < end:
-                result["counts"][local.hour] += 1
+            if start <= local <= end:
+                # El instante actual pertenece al último intervalo.
+                index = min(23, (local - start) // timedelta(hours=1))
+                result["counts"][index] += 1
         result["total"] = sum(result["counts"])
         peak = max(result["counts"])
         result["peak_hours"] = [

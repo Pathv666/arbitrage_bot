@@ -109,8 +109,9 @@ Qué ofrece:
 - **Supervisar** (público): estado del bot (corriendo/detenido + uptime), mejor
   spread neto actual, oportunidades de las últimas 24 h, profit estimado, tabla de
   oportunidades recientes y las últimas líneas del log. Todo se auto-refresca.
-- **Historial diario** (público): gráfica con detecciones por hora, selector de
-  fecha y total del día, en horario de Venezuela (UTC−4). Se actualiza cada 30 s
+- **Últimas 24 horas** (público): gráfica con la cantidad de detecciones y el
+  horario de cada intervalo de una hora, desde 24 horas antes del momento actual,
+  en horario de Venezuela (UTC−4). Se actualiza cada 30 s
   y cuenta todos los registros guardados, incluidas nuevas detecciones de una
   oportunidad persistente. Limpiar las oportunidades también vacía este historial;
   las horas sin registros pueden corresponder al monitor apagado.
