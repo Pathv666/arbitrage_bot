@@ -27,6 +27,16 @@ def _decimal(value, *, field: str) -> Decimal:
     return result
 
 
+def _as_bool(value, *, field: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value in (1, "1", "true", "True", "TRUE"):
+        return True
+    if value in (0, "0", "false", "False", "FALSE"):
+        return False
+    raise ValueError(f"{field}: boolean inválido")
+
+
 def canonical_network(value: str) -> str:
     raw = (value or "").upper().replace(" ", "").replace("_", "").replace("-", "")
     aliases = {
@@ -80,7 +90,7 @@ class BinanceNetworkCollector:
                 continue
             result.append(NetworkCost(
                 self.exchange, asset.upper(), network,
-                bool(item.get("depositEnable")), bool(item.get("withdrawEnable")),
+                _as_bool(item.get("depositEnable"), field="depositEnable"), _as_bool(item.get("withdrawEnable"), field="withdrawEnable"),
                 _decimal(item.get("withdrawFee", "0"), field="withdrawFee"),
                 _decimal(item.get("withdrawMin", "0"), field="withdrawMin"),
                 now,
@@ -144,7 +154,7 @@ class OKXNetworkCollector:
                 fee_raw = item.get("minFee", "0")
             result.append(NetworkCost(
                 self.exchange, asset.upper(), network,
-                bool(item.get("canDep")), bool(item.get("canWd")),
+                _as_bool(item.get("canDep"), field="canDep"), _as_bool(item.get("canWd"), field="canWd"),
                 _decimal(fee_raw, field="fee"),
                 _decimal(item.get("minWd", "0"), field="minWd"),
                 now,
