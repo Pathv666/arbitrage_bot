@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "p2p-arb-bot"
 version = "0.1.0"
-description = "Monitor (solo aviso) de arbitraje P2P Binance USDT/VES con arquitectura limpia"
+description = "Scanner de arbitraje P2P multi-exchange VND/USDT de solo lectura"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

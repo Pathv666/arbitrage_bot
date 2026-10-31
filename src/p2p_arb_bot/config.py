@@ -14,6 +14,7 @@ from decimal import Decimal, InvalidOperation
 from dotenv import load_dotenv
 
 from .domain.models import WatchTarget
+from .scanner_config import ScannerSettings
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +65,9 @@ class Defaults:
     """Valores predeterminados leídos del entorno/``.env``."""
 
     assets: tuple[str, ...] = ("USDT",)
-    fiat: str = "VES"
+    fiat: str = "VND"
     pay_methods: tuple[str, ...] = ()
-    max_fiat: Decimal = Decimal("5000")
+    max_fiat: Decimal = Decimal("47300000")
     threshold_pct: Decimal = Decimal("1.0")
     fee_buffer_pct: Decimal = Decimal("0.0")
     outlier_max_dev_pct: Decimal = Decimal("15")
@@ -82,10 +83,11 @@ class Defaults:
     beep: bool = True
     no_input: bool = False
     rows: int = 20
+    scanner: ScannerSettings = field(default_factory=ScannerSettings)
 
     @classmethod
     def from_env(cls) -> "Defaults":
-        load_dotenv()  # carga .env si existe; no falla si no está
+        load_dotenv(dotenv_path=os.getenv("ENV_PATH"))  # respeta el archivo elegido por dashboard
         if os.getenv("MAX_USDT") and not os.getenv("MAX_FIAT"):
             # Un .env de antes del cambio a fondo en fiat: sin este aviso el bot
             # arrancaría con el default de MAX_FIAT, que no tiene nada que ver con
@@ -93,15 +95,16 @@ class Defaults:
             logger.warning(
                 "MAX_USDT ya no se lee: el fondo ahora va en fiat (MAX_FIAT). "
                 "Se usa MAX_FIAT=%s; define MAX_FIAT en tu .env para ajustarlo.",
-                os.getenv("MAX_FIAT") or "5000",
+                os.getenv("MAX_FIAT") or "47300000",
             )
         methods_raw = os.getenv("PAY_METHODS", "") or ""
         methods = tuple(m.strip() for m in methods_raw.split(",") if m.strip())
         return cls(
+            scanner=ScannerSettings.from_env(),
             assets=_get_assets(),
-            fiat=os.getenv("FIAT", "VES") or "VES",
+            fiat=(os.getenv("FIAT", "VND") or "VND").upper(),
             pay_methods=methods,
-            max_fiat=_get_decimal("MAX_FIAT", "5000"),
+            max_fiat=_get_decimal("MAX_FIAT", "47300000"),
             threshold_pct=_get_decimal("THRESHOLD_PCT", "1.0"),
             fee_buffer_pct=_get_decimal("FEE_BUFFER_PCT", "0.0"),
             outlier_max_dev_pct=_get_decimal("OUTLIER_MAX_DEV_PCT", "2.5"),
@@ -142,7 +145,7 @@ class AppConfig:
         if self.poll_interval_s <= 0:
             raise ValueError("POLL_INTERVAL_S debe ser > 0.")
         for t in self.targets:
-            if t.max_fiat <= 0:
+            if not t.max_fiat.is_finite() or t.max_fiat <= 0:
                 raise ValueError(f"max_fiat debe ser > 0 (target {t.label}).")
             if not t.asset or not t.fiat:
                 raise ValueError("asset y fiat son obligatorios.")

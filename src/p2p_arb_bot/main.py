@@ -14,6 +14,11 @@ from decimal import Decimal, InvalidOperation
 from rich.console import Console
 
 from .application.monitor import MonitorService
+from .application.scanner import ScannerService
+from .application.ports import RouteNotifier
+from .infrastructure.exchanges import BinanceSource, OKXSource, BybitSource, BingXSource, ResilientSource
+from .infrastructure.scanner_output import ManualNetworkCosts, ScannerStatus
+from .infrastructure.telegram_notifier import TelegramNotifier
 from .config import SUPPORTED_ASSETS, AppConfig, Defaults
 from .domain.models import WatchTarget
 from .infrastructure.binance_p2p import BinanceP2PSource
@@ -206,6 +211,46 @@ async def build_config(source: BinanceP2PSource, defaults: Defaults) -> AppConfi
 
 
 async def amain(defaults: Defaults) -> None:
+    if defaults.scanner.enabled:
+        await run_scanner(defaults)
+        return
+    await run_legacy(defaults)
+
+
+async def run_scanner(defaults: Defaults) -> None:
+    # V1 no necesita discovery ni interacción para arrancar con un exchange caído.
+    factories = {"Binance": BinanceSource, "OKX": OKXSource,
+                 "Bybit": BybitSource, "BingX": BingXSource}
+    sources = {}
+    settings = defaults.scanner
+    for name in settings.exchanges:
+        if name == "BingX" and not settings.bingx_enabled:
+            continue
+        sources[name] = ResilientSource(factories[name](impersonate=defaults.impersonate, proxy=defaults.proxy),
+                                        attempts=1 if name == "BingX" else 2)
+    targets = [WatchTarget(asset, defaults.fiat, defaults.pay_methods, defaults.max_fiat,
+                           defaults.threshold_pct, merchant_check=defaults.merchant_check,
+                           rows=defaults.rows, outlier_max_dev_pct=defaults.outlier_max_dev_pct)
+               for asset in defaults.assets]
+    if defaults.poll_interval_s <= 0 or defaults.rows <= 0 or not defaults.max_fiat.is_finite() or defaults.max_fiat <= 0 or not defaults.threshold_pct.is_finite():
+        raise ValueError("Intervalo, filas o tamaño V1 inválidos")
+    repo = SQLiteRepository(defaults.db_path)
+    notifiers: list[RouteNotifier] = [ConsoleNotifier(beep=defaults.beep, console=console)]
+    if defaults.screenshots_enabled:
+        notifiers.append(ScreenshotNotifier(defaults.screenshots_dir, enabled=True))
+    if settings.telegram_token and settings.telegram_chat_id:
+        notifiers.append(TelegramNotifier(settings.telegram_token, settings.telegram_chat_id))
+    service = ScannerService(sources, repo, ScannerStatus(defaults.status_path),
+                             ManualNetworkCosts(settings.networks), settings, notifiers)
+    console.print("[bold green]Scanner V1 · solo lectura[/] " + ", ".join(sources))
+    try:
+        await service.run_forever(targets, defaults.poll_interval_s)
+    finally:
+        await asyncio.gather(*(s.aclose() for s in sources.values()), return_exceptions=True)
+        repo.close()
+
+
+async def run_legacy(defaults: Defaults) -> None:
     source = BinanceP2PSource(impersonate=defaults.impersonate, proxy=defaults.proxy)
     repo: SQLiteRepository | None = None
     try:

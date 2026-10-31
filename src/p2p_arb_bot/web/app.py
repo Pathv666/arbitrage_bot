@@ -111,6 +111,7 @@ def create_app() -> FastAPI:
             "status": db_reader.read_status(p["status_path"]),
             "opportunities": db_reader.recent_opportunities(p["db_path"], limit=50),
             "chart": db_reader.opportunities_by_hour(p["db_path"]),
+            "routes": db_reader.recent_routes(p["db_path"]),
         }
 
     def _bot_view() -> dict:
@@ -123,6 +124,14 @@ def create_app() -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
         return _TEMPLATES.TemplateResponse(request, "dashboard.html", _dashboard_context(request))
+
+    @app.get("/partials/scanner", response_class=HTMLResponse)
+    def partial_scanner(request: Request) -> HTMLResponse:
+        p = _paths()
+        return _TEMPLATES.TemplateResponse(request, "partials/scanner.html", {
+            "status": db_reader.read_status(p["status_path"]),
+            "routes": db_reader.recent_routes(p["db_path"]),
+        })
 
     @app.get("/partials/status", response_class=HTMLResponse)
     def partial_status(request: Request) -> HTMLResponse:

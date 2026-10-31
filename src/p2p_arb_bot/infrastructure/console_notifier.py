@@ -11,6 +11,8 @@ from rich.table import Table
 from rich.text import Text
 
 from ..domain.models import Opportunity, WatchTarget
+from ..domain.execution import Route
+from .route_alert import route_alert_lines
 
 
 class ConsoleNotifier:
@@ -24,6 +26,15 @@ class ConsoleNotifier:
     def _method_label(method: str) -> str:
         # "ALL" es el sentinel interno para "sin filtrar por método".
         return "cualquier método" if method == "ALL" else method
+
+    async def notify_route(self, route: Route, detected_at: datetime) -> None:
+        if self._beep:
+            print("\a", end="", flush=True)
+        # Text evita interpretar nombres/métodos de comerciantes como markup Rich.
+        self._console.print(Panel(
+            Text("\n".join(route_alert_lines(route, detected_at))),
+            title="RUTA V1 · PRECIOS AGRUPADOS", border_style="green",
+        ))
 
     async def notify_opportunity(self, opp: Opportunity) -> None:
         if self._beep:

@@ -389,3 +389,14 @@ def tail_log(log_path: str, lines: int = 100, *, newest_first: bool = False) -> 
         return tail
     entries = _group_log_entries(tail)
     return [line for entry in reversed(entries) for line in entry]
+
+
+def recent_routes(db_path: str, limit: int = 50) -> list[dict]:
+    """Historial V1 agregado, sin abrir ni crear la base de operaciones privadas."""
+    try:
+        with sqlite3.connect(f"file:{os.path.abspath(db_path)}?mode=ro", uri=True) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM route_history ORDER BY last_seen DESC LIMIT ?", (limit,)).fetchall()
+            return [dict(row) for row in rows]
+    except sqlite3.Error:
+        return []
