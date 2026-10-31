@@ -133,3 +133,33 @@ def test_auto_network_costs_drops_stale_dynamic_cache_after_refresh_failure():
     second = asyncio.run(provider.snapshot())
     assert second == ()
     assert provider.health["Binance"]["status"] == "error"
+
+
+def test_bingx_network_collector_parses_read_only_wallet_config(monkeypatch):
+    monkeypatch.setattr(nm, "AsyncSession", FakeSession)
+    monkeypatch.setattr(nm.time, "time", lambda: 1700000000.0)
+    FakeSession.payload = {
+        "code": 0,
+        "msg": "",
+        "data": [{
+            "coin": "USDT",
+            "networkList": [
+                {
+                    "network": "TRC20",
+                    "depositEnable": True,
+                    "withdrawEnable": True,
+                    "withdrawFee": "1.5",
+                    "withdrawMin": "1.5",
+                }
+            ],
+        }],
+    }
+    out = asyncio.run(nm.BingXNetworkCollector("key", "secret").snapshot("USDT"))
+    assert len(out) == 1
+    assert out[0].exchange == "BingX"
+    assert out[0].network == "TRC20"
+    assert out[0].withdraw_fee == Decimal("1.5")
+    assert out[0].min_withdrawal == Decimal("1.5")
+    assert FakeSession.last["headers"]["X-BX-APIKEY"] == "key"
+    assert FakeSession.last["headers"]["X-SOURCE-KEY"] == "BX-AI-SKILL"
+    assert "signature=" in FakeSession.last["url"]
