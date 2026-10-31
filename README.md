@@ -450,3 +450,8 @@ múltiples adaptadores) usando fakes, **sin red ni disco**.
 
 MIT — ver [LICENSE](LICENSE). La fuente Liberation Sans empaquetada en
 `src/p2p_arb_bot/infrastructure/fonts/` conserva su propia licencia (SIL OFL).
+
+### Metadata de red automática
+
+V1.1 puede refrescar fees/minimum/status de Binance, OKX y Bybit con credenciales API de solo lectura. Ver `docs/LOCAL_WINDOWS.md`.
+No necesita ni debe usar permisos Trade/Withdraw.
