@@ -67,6 +67,19 @@ Khi trống, scanner vẫn có thể đọc order books và tính fills nhưng *
 
 Không dùng giá trị minh họa trong `.env.example` như dữ liệu thật.
 
+### Nhập snapshot phí mạng đã xác minh
+
+Không sửa NETWORK_COSTS_JSON bằng tay. Sau khi kiểm tra trực tiếp màn hình rút/nạp của sàn, dùng:
+
+    .\scripts\windows\set_network_snapshot.ps1 -Exchange Binance -Network TRC20 -WithdrawFee <fee> -MinWithdrawal <minimum>
+
+Lặp lại cho OKX/Bybit. Script tự ghi timestamp UTC và thay snapshot cũ cùng exchange/asset/network.
+
+Xem snapshot hiện tại:
+
+    .\.venv\Scripts\python.exe -m p2p_arb_bot.network_snapshot --env .env show
+
+Sau khi thay snapshot, restart scanner. Snapshot quá NETWORK_COST_TTL_S sẽ tự hết hiệu lực.
 ## 4. Smoke test read-only
 
 ```powershell
