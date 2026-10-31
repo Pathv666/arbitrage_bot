@@ -148,7 +148,11 @@ class BybitSource(PublicSource):
         return Ad(str(a["id"]), number(a["price"]), number(a["lastQuantity"]),
                   number(a["minAmount"]), number(a["maxAmount"]),
                   tuple(str(p) for p in a.get("payments", [])),
-                  str(a.get("userId") or a.get("nickName") or a["id"]),
+                  str(
+                      a.get("userId")
+                      if str(a.get("userId") or "").strip() not in {"", "0", "None"}
+                      else (a.get("nickName") or a["id"])
+                  ),
                   str(a.get("nickName", "")), side,
                   exchange=self.exchange, asset=asset, fiat=fiat, timestamp=now,
                   completed_orders=optional_int(a.get("recentOrderNum")),
