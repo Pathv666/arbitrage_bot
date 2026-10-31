@@ -1,3 +1,4 @@
+import asyncio
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -41,8 +42,7 @@ def test_canonical_network_aliases():
     assert nm.canonical_network("Arbitrum One") == "ARBITRUM"
 
 
-@pytest.mark.asyncio
-async def test_binance_network_collector_parses_signed_read_only_metadata(monkeypatch):
+def test_binance_network_collector_parses_signed_read_only_metadata(monkeypatch):
     monkeypatch.setattr(nm, "AsyncSession", FakeSession)
     monkeypatch.setattr(nm.time, "time", lambda: 1700000000.0)
     FakeSession.payload = [{
@@ -58,7 +58,7 @@ async def test_binance_network_collector_parses_signed_read_only_metadata(monkey
             },
         ],
     }]
-    out = await nm.BinanceNetworkCollector("key", "secret").snapshot("USDT")
+    out = asyncio.run(nm.BinanceNetworkCollector("key", "secret").snapshot("USDT"))
     assert [(x.network, x.withdraw_fee, x.min_withdrawal) for x in out] == [
         ("TRC20", Decimal("1.5"), Decimal("10")),
         ("ERC20", Decimal("5"), Decimal("12")),
@@ -68,8 +68,7 @@ async def test_binance_network_collector_parses_signed_read_only_metadata(monkey
     assert FakeSession.last["headers"]["X-MBX-APIKEY"] == "key"
 
 
-@pytest.mark.asyncio
-async def test_okx_network_collector_parses_fee_and_conservative_range(monkeypatch):
+def test_okx_network_collector_parses_fee_and_conservative_range(monkeypatch):
     monkeypatch.setattr(nm, "AsyncSession", FakeSession)
     monkeypatch.setattr(nm.OKXNetworkCollector, "_timestamp", staticmethod(lambda: "2026-10-31T08:00:00.000Z"))
     FakeSession.payload = {
@@ -81,7 +80,7 @@ async def test_okx_network_collector_parses_fee_and_conservative_range(monkeypat
              "fee": "", "maxFee": "7", "minFee": "5", "minWd": "10"},
         ],
     }
-    out = await nm.OKXNetworkCollector("key", "secret", "pass").snapshot("USDT")
+    out = asyncio.run(nm.OKXNetworkCollector("key", "secret", "pass").snapshot("USDT"))
     assert out[0].network == "TRC20" and out[0].withdraw_fee == Decimal("1")
     assert out[1].network == "ERC20" and out[1].withdraw_fee == Decimal("7")
     assert out[1].deposit_enabled is False
@@ -91,8 +90,7 @@ async def test_okx_network_collector_parses_fee_and_conservative_range(monkeypat
     assert headers["OK-ACCESS-SIGN"]
 
 
-@pytest.mark.asyncio
-async def test_bybit_network_collector_parses_chain_status(monkeypatch):
+def test_bybit_network_collector_parses_chain_status(monkeypatch):
     monkeypatch.setattr(nm, "AsyncSession", FakeSession)
     monkeypatch.setattr(nm.time, "time", lambda: 1700000000.0)
     FakeSession.payload = {
@@ -107,7 +105,7 @@ async def test_bybit_network_collector_parses_chain_status(monkeypatch):
             ],
         }]},
     }
-    out = await nm.BybitNetworkCollector("key", "secret").snapshot("USDT")
+    out = asyncio.run(nm.BybitNetworkCollector("key", "secret").snapshot("USDT"))
     assert out[0].network == "TRC20" and out[0].withdraw_enabled
     assert out[1].network == "ERC20" and not out[1].withdraw_enabled
     assert FakeSession.last["headers"]["X-BAPI-API-KEY"] == "key"
@@ -125,14 +123,13 @@ class FlakyCollector:
                             Decimal("1"), Decimal("10"), datetime.now(timezone.utc)),)
 
 
-@pytest.mark.asyncio
-async def test_auto_network_costs_drops_stale_dynamic_cache_after_refresh_failure():
+def test_auto_network_costs_drops_stale_dynamic_cache_after_refresh_failure():
     c = FlakyCollector()
     provider = nm.AutoNetworkCosts((), {"Binance": c}, assets=("USDT",), refresh_s=30)
-    first = await provider.snapshot()
+    first = asyncio.run(provider.snapshot())
     assert first and provider.health["Binance"]["status"] == "ok"
     c.fail = True
     provider._last_refresh = -10**9
-    second = await provider.snapshot()
+    second = asyncio.run(provider.snapshot())
     assert second == ()
     assert provider.health["Binance"]["status"] == "error"
