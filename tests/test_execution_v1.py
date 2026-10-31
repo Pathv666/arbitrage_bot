@@ -131,7 +131,9 @@ def test_partial_sell_rejected_and_counterparty_limit_penalty():
     route = optimize(book)[0]
     assert route.feasible and route.counterparties == 3
     assert dict(route.estimated_costs)["counterparty"] == D("9460")
-    assert not optimize(book, risk=replace(RISK, max_counterparties=2))[0].feasible
+    compact = optimize(book, risk=replace(RISK, max_counterparties=2))[0]
+    assert compact.feasible and compact.counterparties == 2
+    assert [leg.ad.adv_no for leg in compact.sell.legs] == ["s2"]
 
 
 def test_two_networks_chooses_lower_cost_and_cross_asset_rejected():
