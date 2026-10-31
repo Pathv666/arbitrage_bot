@@ -46,6 +46,11 @@ class AccountCollector:
         result=[]
         for a in ASSETS:
             selected=[r for r in rows if r.get('asset' if e!='OKX' else 'ccy')==a]
+            if len(selected)>1: raise CollectorError('schema')
+            if not selected and e=='OKX':
+                # OKX documents funding balances as non-zero assets only.
+                result.append(Balance(e,scope,a,Decimal('0'),Decimal('0'),now))
+                continue
             if len(selected)!=1: raise CollectorError('schema')
             row=selected[0]
             free=decimal(row['free' if e!='OKX' else 'availBal'])
@@ -54,12 +59,19 @@ class AccountCollector:
             result.append(Balance(e,scope,a,free,locked,now))
         if e=='OKX':
             trading=await self.client.get('/api/v5/account/balance',{'ccy':','.join(ASSETS)})
-            if len(trading)!=1: raise CollectorError('schema')
+            if len(trading)>1: raise CollectorError('schema')
+            details=trading[0].get('details',[]) if trading else []
+            if not isinstance(details,list): raise CollectorError('schema')
             for a in ASSETS:
-                selected=[r for r in trading[0]['details'] if r['ccy']==a]
-                if len(selected)!=1: raise CollectorError('schema')
+                selected=[r for r in details if r.get('ccy')==a]
+                if len(selected)>1: raise CollectorError('schema')
+                if not selected:
+                    # Trading balance endpoint likewise returns non-zero assets only.
+                    result.append(Balance(e,'trading_cash',a,Decimal('0'),Decimal('0'),now))
+                    continue
                 row=selected[0]
-                if decimal(row['liab'])!=0: raise CollectorError('schema')
+                liab=row.get('liab','0')
+                if liab not in ('',None) and decimal(liab)!=0: raise CollectorError('schema')
                 cash=decimal(row['cashBal']); frozen=decimal(row['frozenBal'])
                 if frozen>cash: raise CollectorError('schema')
                 available=min(decimal(row['availBal']),cash-frozen)
@@ -77,11 +89,14 @@ class AccountCollector:
         elif e=='BingX':
             pending=(await self.client.get('/openApi/spot/v1/trade/openOrders',{'symbol':SYMBOL}))['orders']
             history=[]
-            for page in range(1,11):
+            # Official contract exposes data.orders and bounds pageIndex*pageSize
+            # to 10,000; it does not require a total field.
+            for page in range(1,101):
                 data=await self.client.get('/openApi/spot/v1/trade/historyOrders',{'symbol':SYMBOL,'pageIndex':page,'pageSize':100})
-                history.extend(data['orders'])
-                if len(history)>=int(data['total']): break
-                if not data['orders']: raise CollectorError('schema')
+                page_orders=data.get('orders')
+                if not isinstance(page_orders,list): raise CollectorError('schema')
+                history.extend(page_orders)
+                if len(page_orders)<100: break
             else: raise CollectorError('schema')
         else:
             async def pages(path):

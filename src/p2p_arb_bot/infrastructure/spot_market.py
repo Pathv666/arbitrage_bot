@@ -45,7 +45,10 @@ class BingXMarketCollector:
     @safe_collector
     async def fees(self) -> Commission:
         row=await self.client.get('/openApi/spot/v1/user/commissionRate',{'symbol':SYMBOL})
-        if row['symbol']!=SYMBOL: raise CollectorError('schema')
+        if not isinstance(row,dict): raise CollectorError('schema')
+        # BingX documentation/SDK variants differ on whether symbol is echoed.
+        # If present it must match; absence is not treated as an error.
+        if row.get('symbol') not in (None,SYMBOL): raise CollectorError('schema')
         maker,taker=decimal(row['makerCommissionRate']),decimal(row['takerCommissionRate'])
         if max(maker,taker)>1: raise CollectorError('schema')
         return Commission(maker,taker,datetime.now(timezone.utc))
