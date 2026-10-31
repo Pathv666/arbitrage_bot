@@ -23,8 +23,14 @@
 
 <div class="status-grid">
   <div class="card kpi">
-    <span class="kpi-label">Estado del bot</span>
-    {% include "partials/bot_controls.html" %}
+    <span class="kpi-label">Estado del scanner</span>
+    {% if status and status.last_update %}
+      <span class="kpi-value pos">Activo</span>
+      <span class="muted small">datos V1 recientes · {{ status.last_update[:19] }}</span>
+      {% if authed %}<span class="muted small">El control iniciar/parar solo gestiona procesos lanzados desde el dashboard.</span>{% endif %}
+    {% else %}
+      {% include "partials/bot_controls.html" %}
+    {% endif %}
   </div>
 
   <div class="card kpi">
