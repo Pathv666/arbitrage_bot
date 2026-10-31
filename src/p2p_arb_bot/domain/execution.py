@@ -346,4 +346,33 @@ def optimize_routes(books: dict[str, list[Ad]], *, asset: str, fiat: str,
                             -route.counterparties,
                         ),
                     ))
+                else:
+                    # Preserve one diagnostic route for every directed exchange
+                    # pair even when the buy side has no eligible liquidity.
+                    buy = blend_bounded(
+                        buy_ads, "BUY", size, risk, now,
+                        max_counterparties=max(1, max_total - 1),
+                    )
+                    sell = Fill("SELL", ZERO, ZERO, ZERO, (), 0, ZERO, "asset")
+                    headline_buy = eligible(buy_ads, "BUY", risk, now)
+                    headline_sell = eligible(sell_ads, "SELL", risk, now)
+                    headline = (
+                        (headline_sell[0].price/headline_buy[0].price-1)*HUNDRED
+                        if headline_buy and headline_sell else ZERO
+                    )
+                    reason = "liquidez de compra insuficiente"
+                    if network is None:
+                        reason += "; red de transferencia no confirmada o caducada"
+                    ages = [
+                        Decimal(str((now-leg.ad.timestamp).total_seconds()))
+                        for leg in buy.legs
+                    ]
+                    routes.append(
+                        Route(
+                            buy_exchange, sell_exchange, asset, fiat, size, buy, sell,
+                            headline, ZERO, -HUNDRED, (), -HUNDRED,
+                            buy.counterparties, max(ages, default=ZERO),
+                            network.network if network else "", False, reason,
+                        )
+                    )
     return sorted(routes, key=lambda r: (r.feasible, r.net_edge_pct), reverse=True)
