@@ -10,6 +10,7 @@ from typing import Any
 
 from .binance_p2p import BinanceP2PSource
 from ..domain.models import Ad, TradeType
+from ..domain.failures import safe_collector, check_http
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +35,14 @@ class PublicSource:
         # Reutiliza sesiones/TLS/proxy del cliente existente, sin API keys.
         self.client = BinanceP2PSource(impersonate=impersonate, proxy=proxy)
 
+    @safe_collector
     async def fetch_ads(self, *, asset, fiat, trade_type, pay_types, rows=20,
                         trans_amount="", merchant_check=False):
         method, params = self.request(asset, fiat, trade_type, min(rows, 100))
         async with self.client._new_session() as session:
             response = await session.request(method, self.endpoint,
                                             **params, timeout=self.timeout_s)
-            if response.status_code != 200:
-                raise RuntimeError(f"{self.exchange}: HTTP {response.status_code}")
+            check_http(response.status_code)
             payload = response.json()
         records = self.records(payload, trade_type)
         if not isinstance(records, list):

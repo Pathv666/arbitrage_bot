@@ -4,6 +4,7 @@ from datetime import datetime
 from curl_cffi.requests import AsyncSession
 
 from ..domain.execution import Route
+from ..domain.failures import safe_collector
 from .route_alert import route_alert_lines
 
 
@@ -45,6 +46,9 @@ class TelegramNotifier:
                 f"Margen neto estimado {opp.net_pct:.3f}%\n"
                 "Verifica legs, liquidez y costes en el dashboard.")
         await self._send(text)
+
+    async def notify_event(self, event) -> None:
+        await self._send(f"Monitor SPOT · solo lectura · {event.category}\n{event.summary}\n{event.timestamp.isoformat()}")
 
     async def _send(self, text: str) -> None:
         try:

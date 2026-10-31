@@ -538,3 +538,20 @@ def test_scanner_v1_routes_health_and_selected_legs(client, env):
 def test_scanner_partial_without_database_or_status(client):
     response = client.get("/partials/scanner")
     assert response.status_code == 200 and "Esperando el primer barrido" in response.text
+
+
+def test_directional_network_details_and_safe_collector_health(client, env):
+    import asyncio
+    from dataclasses import replace
+    from p2p_arb_bot.infrastructure.scanner_output import ScannerStatus
+    from p2p_arb_bot.domain.models import WatchTarget
+    from tests.test_execution_v1 import optimize, networks, NOW
+    snapshots=tuple(replace(n, deposit_enabled=False) if n.exchange=="OKX" else n for n in networks())
+    routes=optimize(networks=snapshots)
+    health={"network_costs":{"status":"empty", "exchanges":{"OKX":{"status":"error", "code":"access_denied", "reason":"Acceso denegado"}}}}
+    asyncio.run(ScannerStatus(str(env/"status.json")).publish(
+        WatchTarget("USDT","VND",(),Decimal("47300000"),Decimal("0.1")),routes,health))
+    body=client.get("/partials/scanner").text
+    assert "Network API OKX: error" in body and "access_denied" in body
+    assert "depósito deshabilitado en destino" in body and "TRC20" in body
+    assert "withdraw=True" in body and "deposit=False" in body

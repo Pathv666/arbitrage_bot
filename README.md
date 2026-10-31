@@ -455,3 +455,13 @@ MIT — ver [LICENSE](LICENSE). La fuente Liberation Sans empaquetada en
 
 V1.1 puede refrescar fees/minimum/status de Binance, OKX y Bybit con credenciales API de solo lectura. Ver `docs/LOCAL_WINDOWS.md`.
 No necesita ni debe usar permisos Trade/Withdraw.
+
+### Observabilidad read-only
+
+Desde `944beda`, el panel de rutas muestra diagnóstico por red y health de cada
+collector. Errores públicos usan códigos cerrados; jamás incluyen mensajes de
+API, URL firmada ni excepciones de transporte. Metadatos sin fee/mínimo se rechazan.
+Los collectors configurados fallan cerrados: no reutilizan manual snapshots del
+mismo exchange tras fallar. Telegram observa transiciones de health, red,
+feasibilidad y threshold con dedup/cooldown de 180s, además de los avisos de ruta.
+Véase `docs/LOCAL_WINDOWS.md` para validación sin leer el `.env` real durante tests.

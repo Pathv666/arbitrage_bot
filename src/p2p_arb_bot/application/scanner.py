@@ -8,6 +8,8 @@ from typing import Mapping
 from ..domain.execution import Route, optimize_routes
 from ..domain.models import WatchTarget
 from ..scanner_config import ScannerSettings
+from ..domain.failures import public_failure
+from .events import EventMonitor
 from .ports import MarketDataSource, NetworkCostProvider, RouteNotifier, ScanPublisher, ScanRepository
 
 logger = logging.getLogger(__name__)
@@ -25,6 +27,7 @@ class ScannerService:
         self.notifiers = notifiers
         self.streaks = {}
         self.last_alert = {}
+        self.events = EventMonitor(notifiers)
 
     async def run_cycle(self, target: WatchTarget) -> list[Route]:
         health = {}
@@ -43,8 +46,8 @@ class ScannerService:
                 health[name] = {"status": "ok" if books[name] else "empty", "ads": len(books[name]),
                                 "datasource": "EXPERIMENTAL_API" if name == "BingX" else "PUBLIC_WEB_ENDPOINT"}
             except Exception as exc:
-                logger.warning("%s fuera de servicio: %s", name, exc)
-                health[name] = {"status": "error", "reason": str(exc), "ads": 0}
+                logger.warning("%s fuera de servicio: %s", name, public_failure(exc)["code"])
+                health[name] = {"status": "error", **public_failure(exc), "ads": 0}
 
         await asyncio.gather(*(fetch_exchange(n, s) for n, s in self.sources.items()))
         if not self.settings.bingx_enabled:
@@ -58,9 +61,9 @@ class ScannerService:
                 "exchanges": provider_health or {},
             }
         except Exception as exc:
-            logger.exception("No se pudo obtener costes de red")
+            logger.warning("No se pudo obtener costes de red")
             networks = ()
-            health["network_costs"] = {"status": "error", "reason": str(exc)}
+            health["network_costs"] = {"status": "error", **public_failure(exc)}
         # Dynamic network snapshots are timestamped during snapshot(). Take the
         # optimization clock afterwards so freshly collected metadata is never
         # rejected as "from the future" by a few milliseconds.
@@ -70,12 +73,13 @@ class ScannerService:
         routes = optimize_routes(books, asset=target.asset, fiat=target.fiat, size=target.max_fiat,
                                  risk=risk, costs=self.settings.costs, networks=networks, now=now)
         scope = (target.asset, target.fiat, str(target.max_fiat))
+        await self.events.scan(str(scope), routes, health, networks, target.threshold_pct, now)
         active = set()
         for route in routes:
             try:
                 self.repository.save_route(route, now, health)
             except Exception:
-                logger.exception("No se pudo guardar ruta")
+                logger.warning("No se pudo guardar ruta")
             key = (*scope, route.buy_exchange, route.sell_exchange, route.network)
             if not route.feasible or route.net_edge_pct < target.threshold_pct:
                 continue
@@ -92,7 +96,7 @@ class ScannerService:
                 try:
                     await notifier.notify_route(route, now)
                 except Exception:
-                    logger.exception("Fallo aislado del notificador")
+                    logger.warning("Fallo aislado del notificador")
             self.last_alert[key] = now
         for key in list(self.streaks):
             if key[:3] == scope and key not in active:
@@ -100,7 +104,7 @@ class ScannerService:
         try:
             await self.publisher.publish(target, routes, health)
         except Exception:
-            logger.exception("No se pudo publicar estado")
+            logger.warning("No se pudo publicar estado")
         return routes
 
     async def run_forever(self, targets: list[WatchTarget], interval_s: float) -> None:
@@ -109,5 +113,5 @@ class ScannerService:
                 try:
                     await self.run_cycle(target)
                 except Exception:
-                    logger.exception("Fallo de ciclo V1 %s", target.label)
+                    logger.warning("Fallo de ciclo V1 %s", target.label)
             await asyncio.sleep(interval_s)
