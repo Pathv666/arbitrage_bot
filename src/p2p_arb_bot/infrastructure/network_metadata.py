@@ -74,7 +74,7 @@ class BinanceNetworkCollector:
         url = f"{self.base_url}/sapi/v1/capital/config/getall?{query}&signature={signature}"
         async with AsyncSession() as session:
             response = await session.get(
-                url, headers={"X-MBX-APIKEY": self.api_key}, timeout=10
+                url, headers={"X-MBX-APIKEY": self.api_key}, timeout=10, allow_redirects=False
             )
         check_http(response.status_code)
         payload = response.json()
@@ -132,7 +132,7 @@ class OKXNetworkCollector:
             "OK-ACCESS-PASSPHRASE": self.passphrase,
         }
         async with AsyncSession() as session:
-            response = await session.get(self.base_url + path, headers=headers, timeout=10)
+            response = await session.get(self.base_url + path, headers=headers, timeout=10, allow_redirects=False)
         check_http(response.status_code)
         payload = response.json()
         check_api(payload.get("code"))
@@ -198,7 +198,7 @@ class BingXNetworkCollector:
                     "X-BX-APIKEY": self.api_key,
                     "X-SOURCE-KEY": "BX-AI-SKILL",
                 },
-                timeout=10,
+                timeout=10, allow_redirects=False,
             )
         check_http(response.status_code)
         payload = response.json()
@@ -264,7 +264,7 @@ class BybitNetworkCollector:
         async with AsyncSession() as session:
             response = await session.get(
                 f"{self.base_url}/v5/asset/coin/query-info?{query}",
-                headers=headers, timeout=10,
+                headers=headers, timeout=10, allow_redirects=False,
             )
         check_http(response.status_code)
         payload = response.json()
@@ -347,3 +347,10 @@ class AutoNetworkCosts:
             if key not in latest or item.timestamp >= latest[key].timestamp:
                 latest[key] = item
         return tuple(latest.values())
+
+
+class UnavailableNetworkCollector:
+    def __init__(self, code): self.code=code
+    async def snapshot(self, asset):
+        from ..domain.failures import CollectorError
+        raise CollectorError(self.code)

@@ -130,6 +130,6 @@ class AccountCollector:
         if symbol not in {SYMBOL,'UNIUSDT'}: raise CollectorError('schema')
         side=str(row['side']).upper()
         if side not in {'BUY','SELL'}: raise CollectorError('schema')
-        if e=='OKX' and row.get('instType','SPOT')!='SPOT': raise CollectorError('schema')
+        if e=='OKX' and (row.get('instType')!='SPOT' or row.get('tdMode')!='cash'): raise CollectorError('schema')
         stamp=timestamp_ms(row['uTime' if e=='OKX' else 'updateTime'])
         return ObservedOrder(e,identity,SYMBOL,side,status,quantity,executed,stamp,source)

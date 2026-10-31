@@ -29,7 +29,7 @@ class FakeSession:
     async def __aexit__(self, *_args):
         return False
 
-    async def get(self, url, headers=None, timeout=None):
+    async def get(self, url, headers=None, timeout=None, allow_redirects=False):
         type(self).last = {"url": url, "headers": headers or {}, "timeout": timeout}
         return FakeResponse(type(self).payload)
 

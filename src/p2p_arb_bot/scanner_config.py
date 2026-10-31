@@ -28,6 +28,12 @@ def integer(name: str, default: int, minimum: int = 1) -> int:
 
 @dataclass(frozen=True, slots=True)
 class ScannerSettings:
+    account_monitor_enabled: bool = False
+    account_status_path: str = 'account_status.json'
+    account_refresh_s: int = 30
+    account_ttl_s: int = 60
+    balance_min_uni: Decimal = Decimal('0.001')
+    balance_min_usdt: Decimal = Decimal('1')
     enabled: bool = True
     exchanges: tuple[str, ...] = ("Binance", "OKX", "Bybit")
     bingx_enabled: bool = False
@@ -75,7 +81,14 @@ class ScannerSettings:
             counterparty_pct=decimal("COUNTERPARTY_PENALTY_PCT", "0.02"),
             network_ttl_s=integer("NETWORK_COST_TTL_S", 86400),
         )
-        return cls(enabled=os.getenv("SCANNER_V1", "true").lower() == "true",
+        refresh = integer('ACCOUNT_REFRESH_S',30)
+        ttl = integer('ACCOUNT_TTL_S',60)
+        if ttl<refresh: raise ValueError('ACCOUNT_TTL_S debe ser >= ACCOUNT_REFRESH_S')
+        return cls(account_monitor_enabled=os.getenv('ACCOUNT_MONITOR_ENABLED','false').lower()=='true',
+                   account_status_path=os.getenv('ACCOUNT_STATUS_PATH','account_status.json'),
+                   account_refresh_s=refresh, account_ttl_s=ttl,
+                   balance_min_uni=decimal('BALANCE_CHANGE_MIN_UNI','0.001'),
+                   balance_min_usdt=decimal('BALANCE_CHANGE_MIN_USDT','1'), enabled=os.getenv("SCANNER_V1", "true").lower() == "true",
                    exchanges=exchanges, bingx_enabled=os.getenv("BINGX_ENABLED", "false").lower() == "true",
                    risk=risk, costs=costs, networks=tuple(networks),
                    network_refresh_s=integer("NETWORK_METADATA_REFRESH_S", 600, 30),

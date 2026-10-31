@@ -8,7 +8,7 @@ if (-not (Test-Path $python)) {
 }
 
 Write-Host "Running tests..." -ForegroundColor Cyan
-& $python -m pytest
+& (Join-Path $PSScriptRoot "test.ps1")
 if ($LASTEXITCODE -ne 0) { throw "Tests failed." }
 
 Write-Host "Running read-only live endpoint smoke..." -ForegroundColor Cyan

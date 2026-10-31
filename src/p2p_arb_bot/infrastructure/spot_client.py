@@ -94,3 +94,9 @@ class SpotReadClient:
         if isinstance(body,dict) and 'code' in body:
             check_api(body['code'])
         return body
+
+
+class UnavailableReadClient:
+    def __init__(self, exchange, code): self.exchange=exchange; self.code=code
+    async def get(self, path, params=None):
+        raise CollectorError(self.code)

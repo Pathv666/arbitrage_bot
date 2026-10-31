@@ -28,7 +28,11 @@ class ConsoleNotifier:
         return "cualquier método" if method == "ALL" else method
 
     async def notify_event(self, event) -> None:
-        self._console.print(Text(f"[{event.category}] {event.summary}"))
+        # El dashboard legado expone stdout/log del bot sin login.
+        # No copiar balances ni IDs de órdenes al log público.
+        summary = ('Cambio privado SPOT; consultar panel privado o Telegram'
+                   if event.category in {'balance','order'} else event.summary)
+        self._console.print(Text(f"[{event.category}] {summary}"))
 
     async def notify_route(self, route: Route, detected_at: datetime) -> None:
         if self._beep:

@@ -1,3 +1,4 @@
+param([switch]$Accounts)
 $ErrorActionPreference = "Stop"
 $repo = Split-Path $PSScriptRoot -Parent | Split-Path -Parent
 Set-Location $repo
@@ -8,6 +9,7 @@ if (-not (Test-Path $python)) {
 }
 
 $env:SCANNER_V1 = "true"
+if ($Accounts) { $env:ACCOUNT_MONITOR_ENABLED = "true" }
 $env:NO_INPUT = "true"
 
 Write-Host "Starting V1 scanner in READ-ONLY mode. Ctrl+C to stop." -ForegroundColor Green

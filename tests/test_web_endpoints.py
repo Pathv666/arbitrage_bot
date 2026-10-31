@@ -555,3 +555,26 @@ def test_directional_network_details_and_safe_collector_health(client, env):
     assert "Network API OKX: error" in body and "access_denied" in body
     assert "depósito deshabilitado en destino" in body and "TRC20" in body
     assert "withdraw=True" in body and "deposit=False" in body
+
+
+def test_account_snapshot_is_private_fresh_and_not_cached(client, authed, env, monkeypatch):
+    import json
+    path=env/'accounts.json'
+    monkeypatch.setenv('ACCOUNT_STATUS_PATH',str(path))
+    payload={'last_update':datetime.now(timezone.utc).isoformat(),'checkpoint':'BLOCKED',
+             'health':{},'balances':[{'exchange':'BingX','scope':'spot','asset':'UNI','available':'PRIVATE-42','locked':'1','timestamp':'now'}],
+             'orders':[],'order_coverage':'UNI-USDT','market':None,'fees':None,
+             'uni_review':{'ready':False,'reason':'fee unknown'}}
+    path.write_text(json.dumps(payload))
+    response=authed.get('/partials/accounts')
+    assert response.status_code==200 and 'PRIVATE-42' in response.text
+    assert response.headers['cache-control']=='no-store'
+    authed.post('/logout')
+    response=client.get('/partials/accounts',headers={'HX-Request':'true'})
+    assert response.status_code==401 and 'PRIVATE-42' not in response.text
+    assert 'PRIVATE-42' not in client.get('/').text
+    authed.post('/login',data={'password':PASSWORD})
+    payload['last_update']=(datetime.now(timezone.utc)-timedelta(minutes=5)).isoformat()
+    path.write_text(json.dumps(payload))
+    response=authed.get('/partials/accounts')
+    assert 'PRIVATE-42' not in response.text and 'Sin snapshot privado vigente' in response.text

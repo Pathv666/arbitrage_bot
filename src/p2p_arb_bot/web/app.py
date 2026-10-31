@@ -31,6 +31,7 @@ def _paths() -> dict:
         "db_path": os.getenv("DB_PATH", "opportunities.db") or "opportunities.db",
         "log_path": os.getenv("LOG_PATH", "p2p_arb_bot.log") or "p2p_arb_bot.log",
         "status_path": os.getenv("STATUS_PATH", "status.json") or "status.json",
+        "account_status_path": os.getenv("ACCOUNT_STATUS_PATH", "account_status.json"),
         "env_path": os.getenv("ENV_PATH", ".env") or ".env",
         # Fichero propio del dashboard (el bot no lo conoce): ver trade_store.
         "trades_db_path": os.getenv("TRADES_DB_PATH", "trades.db") or "trades.db",
@@ -124,6 +125,21 @@ def create_app() -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
         return _TEMPLATES.TemplateResponse(request, "dashboard.html", _dashboard_context(request))
+
+    @app.get("/partials/accounts", response_class=HTMLResponse)
+    def partial_accounts(request: Request, _: None = Depends(auth.require_login)) -> HTMLResponse:
+        from datetime import datetime, timezone
+        snapshot = db_reader.read_status(_paths()["account_status_path"])
+        fresh = False
+        if snapshot:
+            try:
+                stamp = datetime.fromisoformat(snapshot["last_update"])
+                fresh = stamp.tzinfo and 0 <= (datetime.now(timezone.utc)-stamp).total_seconds() <= int(os.getenv("ACCOUNT_TTL_S", "60"))
+            except (ValueError, KeyError, TypeError):
+                pass
+        return _TEMPLATES.TemplateResponse(request, "partials/accounts.html", {
+            "account": snapshot if fresh else None,
+        }, headers={"Cache-Control": "no-store"})
 
     @app.get("/partials/scanner", response_class=HTMLResponse)
     def partial_scanner(request: Request) -> HTMLResponse:

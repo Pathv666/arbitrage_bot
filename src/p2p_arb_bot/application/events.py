@@ -22,25 +22,32 @@ class EventMonitor:
         self.observed = {}
         self.notified = {}
         self.sent_at = {}
+        self.channel_states = {}
 
     async def observe(self, category: str, key: str, state: str, summary: str,
                       now: datetime, *, initial: bool = False) -> None:
         identity = (category, key)
         if identity not in self.observed and not initial:
             self.notified[identity] = state
+            for notifier in self.notifiers:
+                self.channel_states[(id(notifier),identity)] = state
         self.observed[identity] = state
-        if self.notified.get(identity) == state:
+        if self.notified.get(identity) == state and all(self.channel_states.get((id(n),identity))==state for n in self.notifiers):
             return
         previous = self.sent_at.get(identity)
         if previous and (now-previous).total_seconds() < self.cooldown_s:
             return  # conserva pendiente: se reevalúa aunque no cambie el próximo scan
         event = MonitorEvent(category, key, state, summary, now)
-        delivered = not self.notifiers
+        delivered = True
         for notifier in self.notifiers:
+            channel = (id(notifier),identity)
+            if self.channel_states.get(channel)==state:
+                continue
             try:
                 await notifier.notify_event(event)
-                delivered = True
+                self.channel_states[channel]=state
             except Exception:
+                delivered = False
                 logger.warning("No se pudo entregar evento de monitorización")
         if delivered:
             self.notified[identity] = state
@@ -79,3 +86,7 @@ class EventMonitor:
         for key, n in latest.items():
             state = f"deposit={n.deposit_enabled};withdraw={n.withdraw_enabled}"
             await self.observe("network_status", key, state, f"{key}: {state}", now)
+
+        previous_networks = [key for category,key in self.observed if category == 'network_status']
+        for key in set(previous_networks)-set(latest):
+            await self.observe('network_status',key,'unknown',f'{key}: metadata no disponible',now)

@@ -1,0 +1,14 @@
+<h2>Account Monitor SPOT · privado · solo lectura</h2>
+{% if account %}
+<p>{{ account.last_update }} · Checkpoint: {{ account.checkpoint }}</p>
+<ul>{% for name, health in account.health.items() %}<li>{{ name }}: {{ health.status }} · {{ health.get('reason', '') }}</li>{% endfor %}</ul>
+<h3>Efectivo observado</h3>
+<ul>{% for balance in account.balances %}<li>{{ balance.exchange }} / {{ balance.scope }} / {{ balance.asset }}: available={{ balance.available }}, locked={{ balance.locked }} · {{ balance.timestamp }}</li>{% endfor %}</ul>
+<h3>Órdenes observadas</h3><p>{{ account.order_coverage }}</p>
+<ul>{% for order in account.orders %}<li>{{ order.exchange }} / {{ order.symbol }} / {{ order.order_id }}: {{ order.status }} · executed={{ order.executed }}/{{ order.quantity }} · {{ order.source }}</li>{% endfor %}</ul>
+<h3>BingX UNI/USDT</h3>
+{% if account.market %}<p>Bid {{ account.market.bid }} / Ask {{ account.market.ask }} · depth {{ account.market.depth_timestamp }} · consistent={{ account.market.consistent }}</p>{% endif %}
+{% if account.fees %}<p>Maker={{ account.fees.maker_rate }} · Taker={{ account.fees.taker_rate }} · {{ account.fees.timestamp }}</p>{% endif %}
+<p>Revisión: {{ account.uni_review.reason }} · liquidez hipotética ready={{ account.uni_review.ready }}</p>
+{% if account.uni_review.get('hypothetical') %}<p>Simulación sobre UNI disponible: {{ account.uni_review.quantity }} · VWAP {{ account.uni_review.vwap }} · slippage {{ account.uni_review.slippage_pct }}% · fee equivalente {{ account.uni_review.estimated_fee_quote_equivalent }} USDT. Esta estimación no es efectivo disponible.</p>{% endif %}
+{% else %}<p>Sin snapshot privado vigente. Collector desactivado, no configurado o caducado. No se presume saldo cero ni venta lista.</p>{% endif %}

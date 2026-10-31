@@ -16,8 +16,8 @@
 <div class="table-wrap"><table class="data"><thead><tr><th>Red</th><th>Origen {{ route.buy_exchange }}</th><th>Destino {{ route.sell_exchange }}</th><th>Diagnóstico</th></tr></thead><tbody>
 {% for diagnostic in route.network_diagnostics %}<tr>
 <td data-label="Red">{{ diagnostic.network or 'sin metadata' }}</td>
-<td data-label="Origen">presente={{ diagnostic.source_present }} · withdraw={{ diagnostic.source_withdraw_enabled }} · fresh={{ diagnostic.source_fresh }} · fee={{ diagnostic.source_fee }} · min={{ diagnostic.source_min_withdrawal }}</td>
-<td data-label="Destino">presente={{ diagnostic.destination_present }} · deposit={{ diagnostic.destination_deposit_enabled }} · fresh={{ diagnostic.destination_fresh }}</td>
+<td data-label="Origen">presente={{ diagnostic.source_present }} · withdraw={{ diagnostic.source_withdraw_enabled }} · fresh={{ diagnostic.source_fresh }} · age={{ diagnostic.source_age_s }}s · timestamp={{ diagnostic.source_timestamp }} · fee={{ diagnostic.source_fee }} · min={{ diagnostic.source_min_withdrawal }}</td>
+<td data-label="Destino">presente={{ diagnostic.destination_present }} · deposit={{ diagnostic.destination_deposit_enabled }} · fresh={{ diagnostic.destination_fresh }} · age={{ diagnostic.destination_age_s }}s · timestamp={{ diagnostic.destination_timestamp }}</td>
 <td data-label="Diagnóstico">{{ diagnostic.reason }}</td></tr>{% endfor %}
 </tbody></table></div>{% endif %}
 <p>Restante compra: {{ route.buy.unfilled }} fiat · Restante venta: {{ route.sell.unfilled }} asset</p>
