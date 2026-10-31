@@ -254,7 +254,7 @@ async def run_scanner(defaults: Defaults) -> None:
         return key, secret
 
     binance_key, binance_secret = pair("BINANCE")
-    if binance_key:
+    if binance_key and "Binance" in settings.exchanges:
         collectors["Binance"] = BinanceNetworkCollector(
             binance_key, binance_secret,
             base_url=os.getenv("BINANCE_API_BASE_URL") or None,
@@ -264,14 +264,14 @@ async def run_scanner(defaults: Defaults) -> None:
     okx_passphrase = os.getenv("OKX_API_PASSPHRASE", "")
     if bool(okx_key) != bool(okx_passphrase):
         raise ValueError("OKX: API_KEY/API_SECRET/API_PASSPHRASE deben configurarse juntos")
-    if okx_key:
+    if okx_key and "OKX" in settings.exchanges:
         collectors["OKX"] = OKXNetworkCollector(
             okx_key, okx_secret, okx_passphrase,
             base_url=os.getenv("OKX_API_BASE_URL") or None,
         )
 
     bybit_key, bybit_secret = pair("BYBIT")
-    if bybit_key:
+    if bybit_key and "Bybit" in settings.exchanges:
         collectors["Bybit"] = BybitNetworkCollector(
             bybit_key, bybit_secret,
             base_url=os.getenv("BYBIT_API_BASE_URL") or None,
