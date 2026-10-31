@@ -164,6 +164,82 @@ class OKXNetworkCollector:
         return tuple(result)
 
 
+class BingXNetworkCollector:
+    exchange = "BingX"
+    base_url = "https://open-api.bingx.com"
+
+    def __init__(self, api_key: str, api_secret: str, *, recv_window: int = 5000,
+                 base_url: str | None = None):
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.recv_window = recv_window
+        if base_url:
+            self.base_url = base_url.rstrip("/")
+
+    async def snapshot(self, asset: str) -> tuple[NetworkCost, ...]:
+        params = {
+            "coin": asset.upper(),
+            "recvWindow": self.recv_window,
+            "timestamp": int(time.time() * 1000),
+        }
+        query = "&".join(
+            f"{key}={params[key]}" for key in sorted(params)
+        )
+        signature = hmac.new(
+            self.api_secret.encode(), query.encode(), hashlib.sha256
+        ).hexdigest()
+        url = (
+            f"{self.base_url}/openApi/wallets/v1/capital/config/getall"
+            f"?{query}&signature={signature}"
+        )
+        async with AsyncSession() as session:
+            response = await session.get(
+                url,
+                headers={
+                    "X-BX-APIKEY": self.api_key,
+                    "X-SOURCE-KEY": "BX-AI-SKILL",
+                },
+                timeout=10,
+            )
+        if response.status_code != 200:
+            raise RuntimeError(f"BingX network metadata HTTP {response.status_code}")
+        payload = response.json()
+        if isinstance(payload, dict) and "code" in payload and int(payload.get("code", -1)) != 0:
+            raise RuntimeError(
+                f"BingX network metadata code={payload.get('code')}: {payload.get('msg', '')}"
+            )
+        data = payload.get("data", payload) if isinstance(payload, dict) else payload
+        if isinstance(data, dict):
+            data = data.get("coins") or data.get("list") or data.get("data") or []
+        if not isinstance(data, list):
+            raise ValueError("BingX network metadata: respuesta inesperada")
+        coin = next(
+            (x for x in data if str(x.get("coin", "")).upper() == asset.upper()),
+            None,
+        )
+        if not coin:
+            raise ValueError(f"BingX network metadata: {asset} ausente")
+        now = datetime.now(timezone.utc)
+        result = []
+        for item in coin.get("networkList", []):
+            network = canonical_network(
+                str(item.get("network") or item.get("name") or "")
+            )
+            if not network:
+                continue
+            result.append(NetworkCost(
+                self.exchange, asset.upper(), network,
+                _as_bool(item.get("depositEnable"), field="depositEnable"),
+                _as_bool(item.get("withdrawEnable"), field="withdrawEnable"),
+                _decimal(item.get("withdrawFee", "0"), field="withdrawFee"),
+                _decimal(item.get("withdrawMin", "0"), field="withdrawMin"),
+                now,
+            ))
+        if not result:
+            raise ValueError("BingX network metadata: networkList vacío")
+        return tuple(result)
+
+
 class BybitNetworkCollector:
     exchange = "Bybit"
     base_url = "https://api.bybit.com"

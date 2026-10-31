@@ -20,7 +20,7 @@ from .application.ports import RouteNotifier
 from .infrastructure.exchanges import BinanceSource, OKXSource, BybitSource, BingXSource, ResilientSource
 from .infrastructure.scanner_output import ManualNetworkCosts, ScannerStatus
 from .infrastructure.network_metadata import (
-    AutoNetworkCosts, BinanceNetworkCollector, OKXNetworkCollector, BybitNetworkCollector,
+    AutoNetworkCosts, BinanceNetworkCollector, OKXNetworkCollector, BybitNetworkCollector, BingXNetworkCollector,
 )
 from .infrastructure.telegram_notifier import TelegramNotifier
 from .config import SUPPORTED_ASSETS, AppConfig, Defaults
@@ -275,6 +275,13 @@ async def run_scanner(defaults: Defaults) -> None:
         collectors["Bybit"] = BybitNetworkCollector(
             bybit_key, bybit_secret,
             base_url=os.getenv("BYBIT_API_BASE_URL") or None,
+        )
+
+    bingx_key, bingx_secret = pair("BINGX")
+    if bingx_key:
+        collectors["BingX"] = BingXNetworkCollector(
+            bingx_key, bingx_secret,
+            base_url=os.getenv("BINGX_API_BASE_URL") or None,
         )
 
     network_provider = (

@@ -98,6 +98,9 @@ OKX_API_PASSPHRASE=
 
 BYBIT_API_KEY=
 BYBIT_API_SECRET=
+
+BINGX_API_KEY=
+BINGX_API_SECRET=
 ```
 
 Quy tắc an toàn:
@@ -111,7 +114,8 @@ Quy tắc an toàn:
 Nguồn API:
 - Binance: signed USER_DATA `GET /sapi/v1/capital/config/getall`;
 - OKX: authenticated `GET /api/v5/asset/currencies`;
-- Bybit: authenticated `GET /v5/asset/coin/query-info`.
+- Bybit: authenticated `GET /v5/asset/coin/query-info`;
+- BingX: authenticated Read `GET /openApi/wallets/v1/capital/config/getall`.
 
 Manual snapshot vẫn là fallback có chủ ý qua `set_network_snapshot.ps1`.
 ## 4. Smoke test read-only
