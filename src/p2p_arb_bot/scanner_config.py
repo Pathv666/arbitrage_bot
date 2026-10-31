@@ -34,6 +34,7 @@ class ScannerSettings:
     risk: RiskPolicy = RiskPolicy()
     costs: CostPolicy = CostPolicy()
     networks: tuple[NetworkCost, ...] = ()
+    network_refresh_s: int = 600
     alert_min_scans: int = 3
     alert_min_seconds: int = 30
     alert_cooldown_seconds: int = 300
@@ -77,6 +78,7 @@ class ScannerSettings:
         return cls(enabled=os.getenv("SCANNER_V1", "true").lower() == "true",
                    exchanges=exchanges, bingx_enabled=os.getenv("BINGX_ENABLED", "false").lower() == "true",
                    risk=risk, costs=costs, networks=tuple(networks),
+                   network_refresh_s=integer("NETWORK_METADATA_REFRESH_S", 600, 30),
                    alert_min_scans=integer("ALERT_MIN_SCANS", 3),
                    alert_min_seconds=integer("ALERT_MIN_SECONDS", 30, 0),
                    alert_cooldown_seconds=integer("ALERT_COOLDOWN_SECONDS", 300, 0),

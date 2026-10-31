@@ -80,6 +80,40 @@ Xem snapshot hiện tại:
     .\.venv\Scripts\python.exe -m p2p_arb_bot.network_snapshot --env .env show
 
 Sau khi thay snapshot, restart scanner. Snapshot quá NETWORK_COST_TTL_S sẽ tự hết hiệu lực.
+### Tự động lấy phí/trạng thái mạng qua API chỉ-đọc
+
+Nếu có API credentials chỉ-đọc, scanner sẽ tự refresh metadata mạng và ghi health vào dashboard. Không cần nhập snapshot thủ công định kỳ.
+
+Trong `.env`:
+
+```dotenv
+NETWORK_METADATA_REFRESH_S=600
+
+BINANCE_API_KEY=
+BINANCE_API_SECRET=
+
+OKX_API_KEY=
+OKX_API_SECRET=
+OKX_API_PASSPHRASE=
+
+BYBIT_API_KEY=
+BYBIT_API_SECRET=
+```
+
+Quy tắc an toàn:
+- chỉ tạo key có quyền **Read** / quyền đọc tài sản cần thiết;
+- **không bật Trade**;
+- **không bật Withdraw**;
+- ưu tiên bind IP khi sàn hỗ trợ;
+- `.env` đã nằm trong `.gitignore`; không copy key vào issue/PR/chat;
+- nếu collector lỗi khi refresh, snapshot động cũ không được giả làm dữ liệu mới; route liên quan sẽ mất snapshot và quay lại REJECTED trừ khi có manual snapshot còn hiệu lực.
+
+Nguồn API:
+- Binance: signed USER_DATA `GET /sapi/v1/capital/config/getall`;
+- OKX: authenticated `GET /api/v5/asset/currencies`;
+- Bybit: authenticated `GET /v5/asset/coin/query-info`.
+
+Manual snapshot vẫn là fallback có chủ ý qua `set_network_snapshot.ps1`.
 ## 4. Smoke test read-only
 
 ```powershell

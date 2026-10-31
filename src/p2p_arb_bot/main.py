@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from decimal import Decimal, InvalidOperation
 
 from rich.console import Console
@@ -18,6 +19,9 @@ from .application.scanner import ScannerService
 from .application.ports import RouteNotifier
 from .infrastructure.exchanges import BinanceSource, OKXSource, BybitSource, BingXSource, ResilientSource
 from .infrastructure.scanner_output import ManualNetworkCosts, ScannerStatus
+from .infrastructure.network_metadata import (
+    AutoNetworkCosts, BinanceNetworkCollector, OKXNetworkCollector, BybitNetworkCollector,
+)
 from .infrastructure.telegram_notifier import TelegramNotifier
 from .config import SUPPORTED_ASSETS, AppConfig, Defaults
 from .domain.models import WatchTarget
@@ -240,8 +244,49 @@ async def run_scanner(defaults: Defaults) -> None:
         notifiers.append(ScreenshotNotifier(defaults.screenshots_dir, enabled=True))
     if settings.telegram_token and settings.telegram_chat_id:
         notifiers.append(TelegramNotifier(settings.telegram_token, settings.telegram_chat_id))
+    collectors = {}
+
+    def pair(prefix: str) -> tuple[str, str]:
+        key = os.getenv(f"{prefix}_API_KEY", "")
+        secret = os.getenv(f"{prefix}_API_SECRET", "")
+        if bool(key) != bool(secret):
+            raise ValueError(f"{prefix}: API_KEY y API_SECRET deben configurarse juntos")
+        return key, secret
+
+    binance_key, binance_secret = pair("BINANCE")
+    if binance_key and "Binance" in settings.exchanges:
+        collectors["Binance"] = BinanceNetworkCollector(
+            binance_key, binance_secret,
+            base_url=os.getenv("BINANCE_API_BASE_URL") or None,
+        )
+
+    okx_key, okx_secret = pair("OKX")
+    okx_passphrase = os.getenv("OKX_API_PASSPHRASE", "")
+    if bool(okx_key) != bool(okx_passphrase):
+        raise ValueError("OKX: API_KEY/API_SECRET/API_PASSPHRASE deben configurarse juntos")
+    if okx_key and "OKX" in settings.exchanges:
+        collectors["OKX"] = OKXNetworkCollector(
+            okx_key, okx_secret, okx_passphrase,
+            base_url=os.getenv("OKX_API_BASE_URL") or None,
+        )
+
+    bybit_key, bybit_secret = pair("BYBIT")
+    if bybit_key and "Bybit" in settings.exchanges:
+        collectors["Bybit"] = BybitNetworkCollector(
+            bybit_key, bybit_secret,
+            base_url=os.getenv("BYBIT_API_BASE_URL") or None,
+        )
+
+    network_provider = (
+        AutoNetworkCosts(
+            settings.networks, collectors, assets=defaults.assets,
+            refresh_s=settings.network_refresh_s,
+        )
+        if collectors
+        else ManualNetworkCosts(settings.networks)
+    )
     service = ScannerService(sources, repo, ScannerStatus(defaults.status_path),
-                             ManualNetworkCosts(settings.networks), settings, notifiers)
+                             network_provider, settings, notifiers)
     console.print("[bold green]Scanner V1 · solo lectura[/] " + ", ".join(sources))
     try:
         await service.run_forever(targets, defaults.poll_interval_s)
