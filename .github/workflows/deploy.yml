@@ -1,17 +1,9 @@
-# Redespliegue automático en el VPS. Generado por /root/deploy/gen-workflows.sh
-#
-# Este workflow no decide nada: solo dispara. Toda la lógica (qué servicios,
-# health check, rollback) vive en /root/deploy/projects/arbitrage_bot.conf, fuera
-# de este repo — que es público y cuyo runner corre como root.
+# VPS deployment is intentionally MANUAL while V1 is validated on a local laptop.
+# Re-enable push-triggered deployment only after VPS configuration, network-cost
+# snapshots, secrets and rollback behavior are revalidated for V1.
 name: deploy
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '.github/ISSUE_TEMPLATE/**'
   workflow_dispatch:
     inputs:
       sha:
@@ -19,9 +11,6 @@ on:
         required: false
         default: ''
 
-# Un despliegue a la vez por repo. cancel-in-progress: false a propósito —
-# cancelar a mitad de un rebuild dejaría el árbol en el commit nuevo con la
-# imagen vieja corriendo.
 concurrency:
   group: deploy-${{ github.repository }}
   cancel-in-progress: false
@@ -31,14 +20,10 @@ permissions:
 
 jobs:
   deploy:
-    # La label vps-arbitrage_bot garantiza que el job cae en SU runner.
     runs-on: [self-hosted, linux, x64, vps, vps-arbitrage_bot]
     timeout-minutes: 90
 
     steps:
-      # Sin actions/checkout: el despliegue ocurre sobre el árbol de trabajo vivo
-      # del VPS, que es donde están los .env y los bind mounts. Ver
-      # /root/deploy/README.md.
       - name: Desplegar en el host
         env:
           TARGET_SHA: ${{ github.event.inputs.sha || github.sha }}
