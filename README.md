@@ -91,6 +91,18 @@ requieren evaluación humana; no se calcula ninguna puntuación AML.
 
 ## Ejecución local y configuración
 
+### Windows / laptop local-first
+
+Para Windows 10/11, usa el runbook y scripts PowerShell preparados para validar V1 antes de VPS:
+
+- [docs/LOCAL_WINDOWS.md](docs/LOCAL_WINDOWS.md)
+- `scripts/windows/setup.ps1`
+- `scripts/windows/smoke.ps1`
+- `scripts/windows/run_scanner.ps1`
+- `scripts/windows/run_dashboard.ps1`
+
+El workflow VPS está en modo **manual-only** durante esta fase; los pushes a `main` no deben desplegar V1 automáticamente.
+
 ```bash
 make venv
 make install
