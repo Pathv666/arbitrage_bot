@@ -122,6 +122,73 @@ def blend(ads: list[Ad], side: TradeType, amount: Decimal, policy: RiskPolicy,
                 len(merchants), remaining, "asset" if asset_sized else "fiat")
 
 
+def blend_bounded(ads: list[Ad], side: TradeType, amount: Decimal, policy: RiskPolicy,
+                  now: datetime, *, max_counterparties: int,
+                  asset_sized: bool = False) -> Fill:
+    """Busca un fill ejecutable con un límite explícito de contrapartes.
+
+    Evalúa dos órdenes conservadores: precio primero y capacidad primero. Elige
+    el fill completo con mejor precio efectivo; si ninguno completa, conserva
+    el de mayor cobertura. Esto evita que muchos anuncios baratos pero pequeños
+    consuman todos los slots y oculten un anuncio algo peor pero con capacidad.
+    """
+    if max_counterparties < 1:
+        return Fill(side, ZERO, ZERO, ZERO, (), 0, amount,
+                    "asset" if asset_sized else "fiat")
+    candidates = eligible(ads, side, policy, now)
+    if not candidates:
+        return Fill(side, ZERO, ZERO, ZERO, (), 0, amount,
+                    "asset" if asset_sized else "fiat")
+
+    def capacity(ad: Ad) -> Decimal:
+        return min(ad.max_amount, ad.surplus * ad.price)
+
+    price_order = candidates
+    capacity_order = sorted(
+        candidates,
+        key=lambda ad: (capacity(ad), -ad.price if side == "BUY" else ad.price),
+        reverse=True,
+    )
+
+    def run(order: list[Ad]) -> Fill:
+        remaining = amount
+        legs: list[Leg] = []
+        merchants = set()
+        for ad in order:
+            merchant = (ad.exchange, ad.advertiser_no)
+            if merchant not in merchants and len(merchants) >= max_counterparties:
+                continue
+            cap = capacity(ad)
+            allocation = min(remaining * ad.price if asset_sized else remaining, cap)
+            if allocation < ad.min_amount:
+                continue
+            quantity = allocation / ad.price
+            legs.append(Leg(ad, allocation, quantity))
+            merchants.add(merchant)
+            remaining = max(ZERO, remaining - (quantity if asset_sized else allocation))
+            if remaining <= EPSILON:
+                remaining = ZERO
+                break
+        fiat = sum((leg.fiat_amount for leg in legs), ZERO)
+        asset = sum((leg.asset_quantity for leg in legs), ZERO)
+        return Fill(side, fiat, asset, fiat / asset if asset else ZERO, tuple(legs),
+                    len(merchants), remaining, "asset" if asset_sized else "fiat")
+
+    fills = [run(price_order), run(capacity_order)]
+    complete = [fill for fill in fills if fill.unfilled == ZERO]
+    if complete:
+        return min(complete, key=lambda fill: fill.effective_price) if side == "BUY" else max(
+            complete, key=lambda fill: fill.effective_price
+        )
+    return min(
+        fills,
+        key=lambda fill: (
+            fill.unfilled,
+            fill.effective_price if side == "BUY" else -fill.effective_price,
+        ),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class NetworkCost:
     exchange: str
@@ -186,7 +253,6 @@ def optimize_routes(books: dict[str, list[Ad]], *, asset: str, fiat: str,
                 continue
             buy_ads = [a for a in buy_book if a.exchange == buy_exchange and a.asset == asset and a.fiat == fiat]
             sell_ads = [a for a in sell_book if a.exchange == sell_exchange and a.asset == asset and a.fiat == fiat]
-            buy = blend(buy_ads, "BUY", size, risk, now)
             matching = []
             for source in networks:
                 if source.exchange != buy_exchange or source.asset != asset or not source.withdraw_enabled:
@@ -198,46 +264,86 @@ def optimize_routes(books: dict[str, list[Ad]], *, asset: str, fiat: str,
             # Sin red confirmada se devuelve una ruta rechazada, nunca coste cero factible.
             for network in matching or [None]:
                 fee = network.withdraw_fee if network else ZERO
-                p2p_buy = buy.total_fiat*costs.p2p_buy_pct/HUNDRED
-                transferred = max(ZERO, buy.total_asset-p2p_buy/buy.effective_price-fee) if buy.effective_price else ZERO
-                sell = blend(sell_ads, "SELL", transferred, risk, now, asset_sized=True) if transferred > 0 else Fill("SELL", ZERO, ZERO, ZERO, (), 0, ZERO, "asset")
-                parties = len({(leg.ad.exchange, leg.ad.advertiser_no) for leg in buy.legs+sell.legs})
-                headline_buy = eligible(buy_ads, "BUY", risk, now)
-                headline_sell = eligible(sell_ads, "SELL", risk, now)
-                headline = ((headline_sell[0].price/headline_buy[0].price-1)*HUNDRED) if headline_buy and headline_sell else ZERO
-                gross = (sell.effective_price/buy.effective_price-1)*HUNDRED if buy.effective_price and sell.effective_price else ZERO
-                deductions = (
-                    ("p2p_buy", p2p_buy/buy.effective_price*sell.effective_price if buy.effective_price else ZERO),
-                    ("p2p_sell", sell.total_fiat*costs.p2p_sell_pct/HUNDRED),
-                    ("trading", size*costs.trading_pct/HUNDRED),
-                    ("network", fee*sell.effective_price),
-                    ("tax", sell.total_fiat*costs.tax_pct/HUNDRED),
-                    ("safety", size*costs.safety_pct/HUNDRED),
-                    ("counterparty", size*costs.counterparty_pct*max(0, parties-2)/HUNDRED),
-                )
-                # Los fees de compra/red ya redujeron el asset vendido.
-                extra = sum((value for key, value in deductions if key not in {"network", "p2p_buy"}), ZERO)
-                net = (sell.total_fiat-size-extra)/size*HUNDRED
-                reasons = []
-                if buy.unfilled:
-                    reasons.append("liquidez de compra insuficiente")
-                if network is None:
-                    reasons.append("red de transferencia no confirmada o caducada")
-                elif buy.effective_price and buy.total_asset-p2p_buy/buy.effective_price < network.min_withdrawal:
-                    reasons.append("mínimo de retiro no alcanzado")
-                if transferred <= 0:
-                    reasons.append("costes superan el inventario")
-                if sell.unfilled:
-                    reasons.append("liquidez de venta insuficiente")
-                if parties > risk.max_counterparties:
-                    reasons.append(
-                        f"demasiadas contrapartes ({parties}>{risk.max_counterparties})"
+                candidates_for_network = []
+                max_total = max(2, risk.max_counterparties)
+                for buy_budget in range(1, max_total):
+                    buy = blend_bounded(
+                        buy_ads, "BUY", size, risk, now,
+                        max_counterparties=buy_budget,
                     )
-                reason = "; ".join(reasons)
-                ages = [Decimal(str((now-leg.ad.timestamp).total_seconds())) for leg in buy.legs+sell.legs]
-                executable = (sell.total_fiat/size-1)*HUNDRED
-                routes.append(Route(buy_exchange, sell_exchange, asset, fiat, size, buy, sell,
-                                    headline, gross, executable, deductions, net, parties,
-                                    max(ages, default=ZERO), network.network if network else "",
-                                    not reason, reason))
+                    if not buy.total_asset:
+                        continue
+                    p2p_buy = buy.total_fiat*costs.p2p_buy_pct/HUNDRED
+                    transferred = max(
+                        ZERO,
+                        buy.total_asset-p2p_buy/buy.effective_price-fee
+                    ) if buy.effective_price else ZERO
+                    sell_budget = max_total - buy.counterparties
+                    sell = blend_bounded(
+                        sell_ads, "SELL", transferred, risk, now,
+                        max_counterparties=sell_budget, asset_sized=True,
+                    ) if transferred > 0 and sell_budget > 0 else Fill(
+                        "SELL", ZERO, ZERO, ZERO, (), 0, transferred, "asset"
+                    )
+                    parties = len({
+                        (leg.ad.exchange, leg.ad.advertiser_no)
+                        for leg in buy.legs+sell.legs
+                    })
+                    headline_buy = eligible(buy_ads, "BUY", risk, now)
+                    headline_sell = eligible(sell_ads, "SELL", risk, now)
+                    headline = ((headline_sell[0].price/headline_buy[0].price-1)*HUNDRED) if headline_buy and headline_sell else ZERO
+                    gross = (sell.effective_price/buy.effective_price-1)*HUNDRED if buy.effective_price and sell.effective_price else ZERO
+                    deductions = (
+                        ("p2p_buy", p2p_buy/buy.effective_price*sell.effective_price if buy.effective_price else ZERO),
+                        ("p2p_sell", sell.total_fiat*costs.p2p_sell_pct/HUNDRED),
+                        ("trading", size*costs.trading_pct/HUNDRED),
+                        ("network", fee*sell.effective_price),
+                        ("tax", sell.total_fiat*costs.tax_pct/HUNDRED),
+                        ("safety", size*costs.safety_pct/HUNDRED),
+                        ("counterparty", size*costs.counterparty_pct*max(0, parties-2)/HUNDRED),
+                    )
+                    extra = sum(
+                        (value for key, value in deductions if key not in {"network", "p2p_buy"}),
+                        ZERO,
+                    )
+                    net = (sell.total_fiat-size-extra)/size*HUNDRED
+                    reasons = []
+                    if buy.unfilled:
+                        reasons.append("liquidez de compra insuficiente")
+                    if network is None:
+                        reasons.append("red de transferencia no confirmada o caducada")
+                    elif buy.effective_price and buy.total_asset-p2p_buy/buy.effective_price < network.min_withdrawal:
+                        reasons.append("mínimo de retiro no alcanzado")
+                    if transferred <= 0:
+                        reasons.append("costes superan el inventario")
+                    if sell.unfilled:
+                        reasons.append("liquidez de venta insuficiente")
+                    if parties > risk.max_counterparties:
+                        reasons.append(
+                            f"demasiadas contrapartes ({parties}>{risk.max_counterparties})"
+                        )
+                    reason = "; ".join(reasons)
+                    ages = [
+                        Decimal(str((now-leg.ad.timestamp).total_seconds()))
+                        for leg in buy.legs+sell.legs
+                    ]
+                    executable = (sell.total_fiat/size-1)*HUNDRED
+                    candidates_for_network.append(
+                        Route(
+                            buy_exchange, sell_exchange, asset, fiat, size, buy, sell,
+                            headline, gross, executable, deductions, net, parties,
+                            max(ages, default=ZERO), network.network if network else "",
+                            not reason, reason,
+                        )
+                    )
+                if candidates_for_network:
+                    routes.append(max(
+                        candidates_for_network,
+                        key=lambda route: (
+                            route.feasible,
+                            route.buy.unfilled == ZERO and route.sell.unfilled == ZERO,
+                            route.net_edge_pct,
+                            -route.counterparties,
+                        ),
+                    ))
     return sorted(routes, key=lambda r: (r.feasible, r.net_edge_pct), reverse=True)
