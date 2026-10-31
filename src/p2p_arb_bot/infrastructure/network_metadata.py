@@ -102,7 +102,7 @@ class BinanceNetworkCollector:
 
 class OKXNetworkCollector:
     exchange = "OKX"
-    base_url = "https://www.okx.com"
+    base_url = "https://openapi.okx.com"
 
     def __init__(self, api_key: str, api_secret: str, passphrase: str,
                  *, base_url: str | None = None):
