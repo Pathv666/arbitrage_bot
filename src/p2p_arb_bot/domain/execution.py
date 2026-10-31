@@ -213,6 +213,20 @@ class CostPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class NetworkDiagnostic:
+    network: str
+    source_present: bool
+    source_withdraw_enabled: bool
+    source_fresh: bool
+    source_fee: Decimal | None
+    source_min_withdrawal: Decimal | None
+    destination_present: bool
+    destination_deposit_enabled: bool
+    destination_fresh: bool
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class Route:
     buy_exchange: str
     sell_exchange: str
@@ -231,6 +245,71 @@ class Route:
     network: str
     feasible: bool
     reason: str
+    network_diagnostics: tuple[NetworkDiagnostic, ...] = ()
+
+
+def _network_diagnostics(
+    networks: tuple[NetworkCost, ...], *, source_exchange: str,
+    destination_exchange: str, asset: str, now: datetime, ttl_s: int,
+) -> tuple[NetworkDiagnostic, ...]:
+    """Explica por red por qué una dirección de transferencia es o no utilizable."""
+    by_key = {(n.exchange, n.asset, n.network): n for n in networks}
+    names = sorted({
+        n.network for n in networks
+        if n.asset == asset and n.exchange in {source_exchange, destination_exchange}
+    })
+    result = []
+    for name in names:
+        source = by_key.get((source_exchange, asset, name))
+        destination = by_key.get((destination_exchange, asset, name))
+
+        def fresh(value: NetworkCost | None) -> bool:
+            if value is None or value.timestamp.tzinfo is None:
+                return False
+            age = (now - value.timestamp).total_seconds()
+            return 0 <= age <= ttl_s
+
+        source_fresh = fresh(source)
+        destination_fresh = fresh(destination)
+        reasons = []
+        if source is None:
+            reasons.append("red ausente en origen")
+        else:
+            if not source.withdraw_enabled:
+                reasons.append("retiro deshabilitado en origen")
+            if not source_fresh:
+                reasons.append("snapshot de origen caducado o futuro")
+            if not source.withdraw_fee.is_finite() or source.withdraw_fee < 0:
+                reasons.append("fee de retiro inválido")
+            if not source.min_withdrawal.is_finite() or source.min_withdrawal < 0:
+                reasons.append("mínimo de retiro inválido")
+        if destination is None:
+            reasons.append("red ausente en destino")
+        else:
+            if not destination.deposit_enabled:
+                reasons.append("depósito deshabilitado en destino")
+            if not destination_fresh:
+                reasons.append("snapshot de destino caducado o futuro")
+        if not reasons:
+            reasons.append("compatible")
+        result.append(NetworkDiagnostic(
+            name,
+            source is not None,
+            bool(source and source.withdraw_enabled),
+            source_fresh,
+            source.withdraw_fee if source else None,
+            source.min_withdrawal if source else None,
+            destination is not None,
+            bool(destination and destination.deposit_enabled),
+            destination_fresh,
+            "; ".join(reasons),
+        ))
+    if not result:
+        result.append(NetworkDiagnostic(
+            "", False, False, False, None, None, False, False, False,
+            "sin metadata de red para origen/destino",
+        ))
+    return tuple(result)
 
 
 def optimize_routes(books: dict[str, list[Ad]], *, asset: str, fiat: str,
@@ -253,6 +332,14 @@ def optimize_routes(books: dict[str, list[Ad]], *, asset: str, fiat: str,
                 continue
             buy_ads = [a for a in buy_book if a.exchange == buy_exchange and a.asset == asset and a.fiat == fiat]
             sell_ads = [a for a in sell_book if a.exchange == sell_exchange and a.asset == asset and a.fiat == fiat]
+            diagnostics = _network_diagnostics(
+                networks,
+                source_exchange=buy_exchange,
+                destination_exchange=sell_exchange,
+                asset=asset,
+                now=now,
+                ttl_s=costs.network_ttl_s,
+            )
             matching = []
             for source in networks:
                 if source.exchange != buy_exchange or source.asset != asset or not source.withdraw_enabled:
@@ -333,7 +420,7 @@ def optimize_routes(books: dict[str, list[Ad]], *, asset: str, fiat: str,
                             buy_exchange, sell_exchange, asset, fiat, size, buy, sell,
                             headline, gross, executable, deductions, net, parties,
                             max(ages, default=ZERO), network.network if network else "",
-                            not reason, reason,
+                            not reason, reason, diagnostics,
                         )
                     )
                 if candidates_for_network:
@@ -372,7 +459,7 @@ def optimize_routes(books: dict[str, list[Ad]], *, asset: str, fiat: str,
                             buy_exchange, sell_exchange, asset, fiat, size, buy, sell,
                             headline, ZERO, -HUNDRED, (), -HUNDRED,
                             buy.counterparties, max(ages, default=ZERO),
-                            network.network if network else "", False, reason,
+                            network.network if network else "", False, reason, diagnostics,
                         )
                     )
     return sorted(routes, key=lambda r: (r.feasible, r.net_edge_pct), reverse=True)

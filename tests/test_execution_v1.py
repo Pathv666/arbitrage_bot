@@ -194,3 +194,37 @@ def test_optimizer_total_counterparty_budget_is_shared_across_both_sides():
         risk=replace(RISK, max_counterparties=4),
     )[0]
     assert route.feasible and route.counterparties == 4
+
+
+def test_network_diagnostics_explain_directional_blockers():
+    source = NetworkCost(
+        "Binance", "USDT", "TRC20", True, True, D("1"), D("10"), NOW
+    )
+    destination = NetworkCost(
+        "OKX", "USDT", "TRC20", False, True, D("0"), D("0"), NOW
+    )
+    route = optimize(networks=(source, destination))[0]
+    assert route.feasible is False
+    assert route.network == ""
+    diag = next(d for d in route.network_diagnostics if d.network == "TRC20")
+    assert diag.source_present and diag.source_withdraw_enabled and diag.source_fresh
+    assert diag.source_fee == D("1") and diag.source_min_withdrawal == D("10")
+    assert diag.destination_present and not diag.destination_deposit_enabled
+    assert diag.destination_fresh
+    assert "depósito deshabilitado en destino" in diag.reason
+
+
+def test_network_diagnostics_show_missing_side():
+    source = NetworkCost(
+        "Binance", "USDT", "BSC", True, True, D("0.1"), D("1"), NOW
+    )
+    destination = NetworkCost(
+        "OKX", "USDT", "ARBITRUM", True, True, D("0"), D("0"), NOW
+    )
+    route = optimize(networks=(source, destination))[0]
+    bsc = next(d for d in route.network_diagnostics if d.network == "BSC")
+    arb = next(d for d in route.network_diagnostics if d.network == "ARBITRUM")
+    assert bsc.source_present and not bsc.destination_present
+    assert "red ausente en destino" in bsc.reason
+    assert not arb.source_present and arb.destination_present
+    assert "red ausente en origen" in arb.reason
