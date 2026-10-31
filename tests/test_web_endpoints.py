@@ -117,12 +117,12 @@ def test_grafica_dashboard_ultimas_24_horas(client, chart_clock):
     assert 'type="date"' not in body
     assert 'hx-trigger="every 30s, refresh"' in body
     assert body.index("Última oportunidad detectada") < body.index("Oportunidades por hora") < body.index("Oportunidades recientes")
-    assert "Desde 13/10/2026 15:37:00 hasta 14/10/2026 15:37:00" in body
+    assert "Desde 14/10/2026 02:37:00 hasta 15/10/2026 02:37:00" in body
     body = client.get("/partials/opportunities-chart").text
     assert "Detecciones por hora en las últimas 24 horas" in body
     chart_clock[0] += timedelta(minutes=30)
     body = client.get("/partials/opportunities-chart").text
-    assert "Desde 13/10/2026 16:07:00 hasta 14/10/2026 16:07:00" in body
+    assert "Desde 14/10/2026 03:07:00 hasta 15/10/2026 03:07:00" in body
 
 
 def test_grafica_ventana_movil_publica_y_limpieza(authed, env, chart_clock):
@@ -136,7 +136,7 @@ def test_grafica_ventana_movil_publica_y_limpieza(authed, env, chart_clock):
     assert response.status_code == 200
     assert "<strong>1</strong>" in response.text
     assert "detecciones registradas" in response.text
-    assert "14/10 11:37–14/10 12:37: 1 detecciones" in response.text
+    assert "14/10 22:37–14/10 23:37: 1 detecciones" in response.text
     assert response.text.count('<g class="chart-hour') == 24
     assert "Ver conteos por hora" in response.text
     # Los parámetros del antiguo selector ya no cambian la ventana.
