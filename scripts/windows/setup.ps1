@@ -6,12 +6,12 @@ $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent | Split-Path -Parent)
 
 function Invoke-Python {
-    param([string[]]$Args)
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$PythonArgs)
     if ($Python -eq "py") {
-        & py -3.11 @Args
+        & py -3.11 @PythonArgs
         if ($LASTEXITCODE -ne 0) { throw "Python command failed." }
     } else {
-        & $Python @Args
+        & $Python @PythonArgs
         if ($LASTEXITCODE -ne 0) { throw "Python command failed." }
     }
 }
@@ -20,7 +20,7 @@ Write-Host "== P2P Arb V1 local setup (Windows) ==" -ForegroundColor Cyan
 
 if (-not (Test-Path ".venv\Scripts\python.exe")) {
     Write-Host "Creating .venv with Python 3.11..."
-    Invoke-Python @("-m","venv",".venv")
+    Invoke-Python -m venv .venv
 }
 
 $venvPython = Resolve-Path ".venv\Scripts\python.exe"
