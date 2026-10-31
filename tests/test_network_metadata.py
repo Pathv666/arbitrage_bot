@@ -1,10 +1,10 @@
-import asyncio
 from __future__ import annotations
+
+import asyncio
 
 from datetime import datetime, timezone
 from decimal import Decimal
 
-import pytest
 
 from p2p_arb_bot.domain.execution import NetworkCost
 from p2p_arb_bot.infrastructure import network_metadata as nm
