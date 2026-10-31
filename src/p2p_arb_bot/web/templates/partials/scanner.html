@@ -1,0 +1,26 @@
+<h2>Scanner V1 · profundidad por tamaño</h2>
+<p class="muted">Estimaciones de solo lectura. Fiabilidad de ejecución, riesgo operativo y exposición bancaria son dimensiones diferentes; no se calcula un score AML.</p>
+{% if status and status.get('scanner_v1') %}
+{% for scope, snapshot in status.get('targets', {}).items() %}
+<h3>{{ snapshot.target }} · tamaño {{ snapshot.requested_size }}</h3>
+<p>Última actualización: {{ snapshot.last_update }} · TTL configurado para cada consulta</p>
+<ul>{% for exchange, health in snapshot.health.items() %}<li>{{ exchange }}: {{ health.status }} {{ health.get('reason', '') }} ({{ health.get('ads', 0) }} anuncios)</li>{% endfor %}</ul>
+<p>Mejor compra efectiva: {{ (snapshot.best_buy.effective_price | unidades) if snapshot.best_buy else 'Sin liquidez completa' }} · Mejor venta efectiva: {{ (snapshot.best_sell.effective_price | unidades) if snapshot.best_sell else 'Sin ruta factible' }}</p>
+{% for route in snapshot.routes %}
+<details {% if loop.first %}open{% endif %}>
+<summary>{{ route.buy_exchange }} → {{ route.sell_exchange }} · {{ route.network or 'Sin red confirmada' }} · {{ 'Factible' if route.feasible else 'Rechazada' }} · neto {{ route.net_edge_pct | float | round(3) }}%</summary>
+<p>{{ route.reason }} · Compra {{ route.buy.effective_price | unidades }} · Venta {{ route.sell.effective_price | unidades }} · Spread bruto {{ route.gross_spread_pct | float | round(3) }}% · Headline {{ route.headline_spread_pct | float | round(3) }}% · Antigüedad al calcular {{ route.quote_age_s }} s · {{ route.counterparties }} contrapartes</p>
+<p>Restante compra: {{ route.buy.unfilled }} fiat · Restante venta: {{ route.sell.unfilled }} asset</p>
+<ul>{% for name, value in route.estimated_costs %}<li>{{ name }}: {{ value | unidades }} {{ route.fiat }}</li>{% endfor %}</ul>
+{% for side, fill in [('Compra', route.buy), ('Venta', route.sell)] %}
+<p>{{ side }} · total {{ fill.total_fiat | unidades }} {{ route.fiat }} · {{ fill.total_asset | unidades }} {{ route.asset }}</p>
+<ul>{% for leg in fill.legs %}<li>{{ leg.ad.exchange }} / {{ leg.ad.advertiser_name }} / ad {{ leg.ad.adv_no }}: {{ leg.fiat_amount | unidades }} @ {{ leg.ad.price }} · {{ leg.asset_quantity | unidades }} {{ route.asset }} · {{ leg.ad.pay_methods | join(', ') }} · {{ leg.ad.datasource_type }} · {{ leg.ad.timestamp }}</li>{% endfor %}</ul>
+{% endfor %}
+</details>
+{% else %}<p>Sin pares de exchanges disponibles.</p>{% endfor %}
+{% endfor %}
+{% else %}<p>Esperando el primer barrido V1.</p>{% endif %}
+<h3>Historial reciente V1</h3>
+<div class="table-wrap"><table class="data"><thead><tr><th>Ruta</th><th>Tamaño</th><th>Bruto / neto %</th><th>Estado</th><th>Primera / última vez</th><th>Detecciones</th></tr></thead><tbody>
+{% for row in routes %}<tr><td data-label="Ruta">{{ row.buy_exchange }} → {{ row.sell_exchange }}</td><td data-label="Tamaño">{{ row.requested_size }}</td><td data-label="Bruto / neto %">{{ row.gross_edge | float | round(3) }} / {{ row.net_edge | float | round(3) }}</td><td data-label="Estado">{{ row.status }}</td><td data-label="Primera / última vez">{{ row.first_seen }} / {{ row.last_seen }}</td><td data-label="Detecciones">{{ row.seen_count }}</td></tr>{% else %}<tr><td colspan="6">Sin historial V1</td></tr>{% endfor %}
+</tbody></table></div>

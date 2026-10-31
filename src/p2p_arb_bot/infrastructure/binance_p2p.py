@@ -14,6 +14,7 @@ import logging
 import os
 import random
 from decimal import Decimal, InvalidOperation
+from dataclasses import replace
 from typing import Any
 
 from curl_cffi.requests import AsyncSession
@@ -94,7 +95,7 @@ class BinanceP2PSource:
             "merchantCheck": merchant_check,
         }
         data = await self._post_with_retry(payload)
-        return [self._parse_ad(item, trade_type) for item in data]
+        return [replace(self._parse_ad(item, trade_type), asset=asset, fiat=fiat) for item in data]
 
     async def _post_with_retry(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         """POST con backoff exponencial + jitter ante 403/429/timeout/success=false.

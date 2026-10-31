@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
+import json
 import sqlite3
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from ..domain.models import Opportunity
+from ..domain.execution import Route
+from .scanner_output import route_payload, route_key
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +51,12 @@ class SQLiteRepository:
         # callbacks distintos; el acceso es secuencial, así que es seguro aquí.
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.executescript(_SCHEMA)
+        self._conn.execute("""CREATE TABLE IF NOT EXISTS route_history (
+            route_key TEXT PRIMARY KEY, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL,
+            seen_count INTEGER NOT NULL, buy_exchange TEXT, sell_exchange TEXT,
+            requested_size TEXT, buy_price TEXT, sell_price TEXT, gross_edge TEXT,
+            net_edge TEXT, status TEXT, payload TEXT NOT NULL, datasource_health TEXT NOT NULL
+        )""")
         self._migrate()
         self._conn.commit()
 
@@ -126,6 +135,23 @@ class SQLiteRepository:
             ),
         )
         return cur.fetchone() is not None
+
+    def save_route(self, route: Route, now: datetime, health: dict) -> None:
+        self._conn.execute("""
+            INSERT INTO route_history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(route_key) DO UPDATE SET
+              last_seen=excluded.last_seen, seen_count=route_history.seen_count+1,
+              buy_price=excluded.buy_price, sell_price=excluded.sell_price,
+              gross_edge=excluded.gross_edge, net_edge=excluded.net_edge,
+              status=excluded.status, payload=excluded.payload,
+              datasource_health=excluded.datasource_health
+        """, (route_key(route), now.isoformat(), now.isoformat(), 1,
+              route.buy_exchange, route.sell_exchange, str(route.requested_size),
+              str(route.buy.effective_price), str(route.sell.effective_price),
+              str(route.gross_spread_pct), str(route.net_edge_pct),
+              "feasible" if route.feasible else "rejected",
+              json.dumps(route_payload(route)), json.dumps(health)))
+        self._conn.commit()
 
     def close(self) -> None:
         try:

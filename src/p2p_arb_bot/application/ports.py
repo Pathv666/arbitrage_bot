@@ -9,6 +9,9 @@ hace triviales los fakes en tests.
 from __future__ import annotations
 
 from decimal import Decimal
+from datetime import datetime
+
+from ..domain.execution import NetworkCost, Route
 from typing import Protocol, runtime_checkable
 
 from ..domain.models import Ad, Opportunity, TradeType, WatchTarget
@@ -63,3 +66,16 @@ class Notifier(Protocol):
     async def notify_heartbeat(
         self, target: WatchTarget, best_spread: Decimal | None
     ) -> None: ...
+
+
+class NetworkCostProvider(Protocol):
+    """Snapshot manual hoy; actualización dinámica inyectable en el futuro."""
+    async def snapshot(self) -> tuple["NetworkCost", ...]: ...
+
+
+class ScanRepository(Protocol):
+    def save_route(self, route: "Route", now: "datetime", health: dict) -> None: ...
+
+
+class ScanPublisher(Protocol):
+    async def publish(self, target: WatchTarget, routes: list["Route"], health: dict) -> None: ...

@@ -7,11 +7,12 @@ y tipos. Es testeable de forma aislada, sin red ni disco.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Literal
 
 TradeType = Literal["BUY", "SELL"]
+DatasourceType = Literal["OFFICIAL_API", "PUBLIC_WEB_ENDPOINT", "EXPERIMENTAL_API"]
 
 #: Plantilla del enlace al LIBRO P2P en vivo, filtrado por lado, par, fiat y
 #: método de pago. No se enlaza a un anuncio concreto: el ``advNo`` que devuelve
@@ -60,6 +61,15 @@ class Ad:
     advertiser_no: str            # userNo
     advertiser_name: str          # nickName
     trade_type: TradeType
+    exchange: str = "Binance"
+    asset: str = "USDT"
+    fiat: str = "VND"
+    completed_orders: int | None = None
+    completion_rate: Decimal | None = None  # porcentaje 0..100
+    payment_time_minutes: int | None = None
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    datasource_type: DatasourceType = "PUBLIC_WEB_ENDPOINT"
+    verified: bool = False
 
 
 @dataclass(frozen=True, slots=True)

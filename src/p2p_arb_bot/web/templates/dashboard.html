@@ -8,7 +8,12 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">BINANCE P2P · MONITOREO</p><h1>Encuentra tu próxima oportunidad</h1><p class="muted">Monitorea precios de compra y venta en Binance P2P, detecta posibles oportunidades de arbitraje y avisa cuando el margen estimado supera el umbral configurado. No ejecuta operaciones.</p></div><span class="live-label"><span aria-hidden="true">●</span> Actualización automática</span></div>
+<div class="page-heading"><div><p class="eyebrow">P2P MULTI-EXCHANGE · SOLO LECTURA</p><h1>Encuentra tu próxima oportunidad</h1><p class="muted">Monitorea precios de compra y venta en Binance P2P, OKX, Bybit y BingX experimental, detecta posibles oportunidades de arbitraje y avisa cuando el margen estimado supera el umbral configurado. No ejecuta operaciones.</p></div><span class="live-label"><span aria-hidden="true">●</span> Actualización automática</span></div>
+
+<section class="card" id="scanner-panel" hx-get="/partials/scanner"
+         hx-trigger="every 5s" hx-swap="innerHTML">
+  {% include "partials/scanner.html" %}
+</section>
 
 <section id="status-panel"
          hx-get="/partials/status"
