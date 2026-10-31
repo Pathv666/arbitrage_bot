@@ -223,7 +223,7 @@ def optimize_routes(books: dict[str, list[Ad]], *, asset: str, fiat: str,
                     reasons.append("liquidez de compra insuficiente")
                 if network is None:
                     reasons.append("red de transferencia no confirmada o caducada")
-                elif buy.total_asset-p2p_buy/buy.effective_price < network.min_withdrawal:
+                elif buy.effective_price and buy.total_asset-p2p_buy/buy.effective_price < network.min_withdrawal:
                     reasons.append("mínimo de retiro no alcanzado")
                 if transferred <= 0:
                     reasons.append("costes superan el inventario")
