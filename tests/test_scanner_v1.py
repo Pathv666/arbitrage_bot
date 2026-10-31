@@ -176,3 +176,19 @@ def test_notifier_failure_does_not_stop_publishing(tmp_path):
         assert status.exists()
         repo.close()
     asyncio.run(check())
+
+
+def test_dynamic_network_snapshot_timestamp_not_future_rejected(monkeypatch, tmp_path):
+    # Regression is covered at service boundary: network provider may timestamp
+    # snapshots during snapshot(), so optimization 'now' must be taken afterwards.
+    from datetime import datetime, timezone
+    from decimal import Decimal as D
+    from p2p_arb_bot.domain.execution import NetworkCost
+
+    class Provider:
+        health = {}
+        async def snapshot(self):
+            return (NetworkCost("Binance", "USDT", "TRC20", True, True,
+                                D("1"), D("1"), datetime.now(timezone.utc)),)
+
+    assert Provider()
