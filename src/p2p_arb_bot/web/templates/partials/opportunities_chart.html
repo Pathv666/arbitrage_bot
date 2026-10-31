@@ -6,12 +6,12 @@
   <div class="chart-stat"><span class="kpi-label">Últimas 24 horas</span><strong>{{ chart.total }}</strong><span class="muted small">detecciones registradas</span></div>
   <div class="chart-stat"><span class="kpi-label">Mayor actividad por hora</span><strong>{{ peak }}</strong><span class="muted small">{% if chart.peak_hours %}{{ chart.hours[chart.peak_hours[0]].range }}{% if chart.peak_hours|length > 1 %} · {{ chart.peak_hours|length - 1 }} intervalo{% if chart.peak_hours|length > 2 %}s{% endif %} más{% endif %}{% else %}Sin detecciones{% endif %}</span></div>
 </div>
-<p class="chart-window muted small">Desde {{ chart.start }} hasta {{ chart.end }} · Venezuela (UTC−4)</p>
+<p class="chart-window muted small">Desde {{ chart.start }} hasta {{ chart.end }} · Việt Nam (UTC+7)</p>
 {% if not chart.total %}<p class="muted" role="status">Sin detecciones registradas en las últimas 24 horas.</p>{% endif %}
 <div class="hourly-chart-scroll">
   <svg class="hourly-chart" viewBox="0 0 1000 300" role="img" aria-labelledby="hourly-chart-title hourly-chart-desc">
     <title id="hourly-chart-title">Detecciones por hora en las últimas 24 horas</title>
-    <desc id="hourly-chart-desc">{{ chart.total }} detecciones en horario de Venezuela. Los valores exactos están en la tabla desplegable.</desc>
+    <desc id="hourly-chart-desc">{{ chart.total }} detecciones en horario de Việt Nam. Los valores exactos están en la tabla desplegable.</desc>
     <text x="44" y="16" class="chart-axis-label">Detecciones</text>
     {% for tick in ([0, peak // 2, peak] if peak > 1 else [0, 1]) %}
     {% set y = 244 - tick / (peak or 1) * 196 %}
@@ -28,7 +28,7 @@
       <text x="{{ x + 14 }}" y="266" text-anchor="middle" class="chart-axis-label chart-time-label">{{ chart.hours[loop.index0].label }}</text>
     </g>
     {% endfor %}
-    <text x="994" y="291" text-anchor="end" class="chart-axis-label">Hora (UTC−4)</text>
+    <text x="994" y="291" text-anchor="end" class="chart-axis-label">Hora (UTC+7)</text>
   </svg>
 </div>
 <p class="muted small chart-scroll-hint">Desliza la gráfica para ver las 24 horas.</p>
@@ -36,7 +36,7 @@
   <summary>Ver conteos por hora <span class="muted small">24 intervalos · una hora cada uno</span></summary>
   <div class="chart-table-scroll" tabindex="0" role="region" aria-label="Conteos por hora, tabla desplazable">
   <table class="chart-table">
-    <caption>Cantidad por intervalo · horario de Venezuela</caption>
+    <caption>Cantidad por intervalo · horario de Việt Nam</caption>
     <thead><tr><th scope="col">Horario</th><th scope="col">Detecciones</th></tr></thead>
     <tbody>{% for count in chart.counts %}
       {% set endpoints = chart.hours[loop.index0].range.split('–') %}
