@@ -148,3 +148,47 @@ def test_latest_disabled_network_overrides_old_enabled_snapshot_and_no_duplicate
     newer_disabled = tuple(replace(n, withdraw_enabled=False) for n in networks())
     assert not any(r.feasible for r in optimize(networks=old+newer_disabled))
     assert len(optimize(networks=old+networks()+networks())) == 2
+
+
+def test_optimizer_prefers_executable_compact_route_over_many_tiny_cheaper_ads():
+    buy_ads = [
+        ad(f"tiny{i}", price=str(25740 + i), cap="3000000")
+        for i in range(10)
+    ]
+    buy_ads += [
+        ad("large1", price="25810", cap="26000000"),
+        ad("large2", price="25820", cap="25000000"),
+    ]
+    sell_ads = [
+        ad("sell1", price="26500", cap="30000000", side="SELL", exchange="OKX"),
+        ad("sell2", price="26490", cap="30000000", side="SELL", exchange="OKX"),
+    ]
+    route = optimize(
+        {"Binance": buy_ads, "OKX": sell_ads},
+        risk=replace(RISK, max_counterparties=4),
+    )[0]
+    assert route.feasible
+    assert route.buy.unfilled == 0
+    assert route.sell.unfilled == 0
+    assert route.counterparties <= 4
+    assert {leg.ad.adv_no for leg in route.buy.legs} <= {"large1", "large2"}
+
+
+def test_optimizer_total_counterparty_budget_is_shared_across_both_sides():
+    buy_ads = [
+        ad("b1", price="25780", cap="25000000"),
+        ad("b2", price="25790", cap="25000000"),
+    ]
+    sell_ads = [
+        ad("s1", price="26500", cap="25000000", side="SELL", exchange="OKX"),
+        ad("s2", price="26490", cap="25000000", side="SELL", exchange="OKX"),
+    ]
+    assert optimize(
+        {"Binance": buy_ads, "OKX": sell_ads},
+        risk=replace(RISK, max_counterparties=3),
+    )[0].feasible is False
+    route = optimize(
+        {"Binance": buy_ads, "OKX": sell_ads},
+        risk=replace(RISK, max_counterparties=4),
+    )[0]
+    assert route.feasible and route.counterparties == 4
