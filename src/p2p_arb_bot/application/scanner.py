@@ -49,7 +49,6 @@ class ScannerService:
         await asyncio.gather(*(fetch_exchange(n, s) for n, s in self.sources.items()))
         if not self.settings.bingx_enabled:
             health["BingX"] = {"status": "disabled", "reason": "experimental; endpoint no verificado"}
-        now = datetime.now(timezone.utc)
         try:
             networks = await self.network_provider.snapshot()
             provider_health = getattr(self.network_provider, "health", None)
@@ -62,6 +61,10 @@ class ScannerService:
             logger.exception("No se pudo obtener costes de red")
             networks = ()
             health["network_costs"] = {"status": "error", "reason": str(exc)}
+        # Dynamic network snapshots are timestamped during snapshot(). Take the
+        # optimization clock afterwards so freshly collected metadata is never
+        # rejected as "from the future" by a few milliseconds.
+        now = datetime.now(timezone.utc)
         risk = replace(self.settings.risk, allowed_payments=target.pay_methods,
                        require_verified=target.merchant_check, outlier_pct=target.outlier_max_dev_pct)
         routes = optimize_routes(books, asset=target.asset, fiat=target.fiat, size=target.max_fiat,
