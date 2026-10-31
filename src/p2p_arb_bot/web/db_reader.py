@@ -23,8 +23,8 @@ from ..domain.arbitrage import suggested_trade
 
 logger = logging.getLogger(__name__)
 
-# Horario venezolano para la gráfica; independiente de la zona del servidor.
-VENEZUELA_TZ = timezone(timedelta(hours=-4), name="America/Caracas")
+# Horario de Vietnam para la gráfica; independiente de la zona del servidor.
+VIETNAM_TZ = timezone(timedelta(hours=7), name="Asia/Ho_Chi_Minh")
 
 
 def opportunities_by_hour(db_path: str, now: datetime | None = None) -> dict:
@@ -32,7 +32,7 @@ def opportunities_by_hour(db_path: str, now: datetime | None = None) -> dict:
     end = now if now is not None else datetime.now(timezone.utc)
     if end.tzinfo is None:
         end = end.replace(tzinfo=timezone.utc)
-    end = end.astimezone(VENEZUELA_TZ)
+    end = end.astimezone(VIETNAM_TZ)
     start = end - timedelta(hours=24)
     lower = (start.astimezone(timezone.utc) - timedelta(days=1)).date().isoformat()
     upper = (end.astimezone(timezone.utc) + timedelta(days=1)).date().isoformat()
@@ -71,7 +71,7 @@ def opportunities_by_hour(db_path: str, now: datetime | None = None) -> dict:
                 detected = datetime.fromisoformat(row["detected_at"])
                 if detected.tzinfo is None:
                     detected = detected.replace(tzinfo=timezone.utc)
-                local = detected.astimezone(VENEZUELA_TZ)
+                local = detected.astimezone(VIETNAM_TZ)
             except (ValueError, TypeError, OverflowError):
                 continue
             if start <= local <= end:
