@@ -206,12 +206,12 @@ def test_network_diagnostics_explain_directional_blockers():
     route = optimize(networks=(source, destination))[0]
     assert route.feasible is False
     assert route.network == ""
-    assert any(
-        "TRC20:" in line
-        and "Binance=withdraw,fresh,fee=1,min=10" in line
-        and "OKX=deposit_off,fresh" in line
-        for line in route.network_diagnostics
-    )
+    diag = next(d for d in route.network_diagnostics if d.network == "TRC20")
+    assert diag.source_present and diag.source_withdraw_enabled and diag.source_fresh
+    assert diag.source_fee == D("1") and diag.source_min_withdrawal == D("10")
+    assert diag.destination_present and not diag.destination_deposit_enabled
+    assert diag.destination_fresh
+    assert "depósito deshabilitado en destino" in diag.reason
 
 
 def test_network_diagnostics_show_missing_side():
@@ -222,5 +222,9 @@ def test_network_diagnostics_show_missing_side():
         "OKX", "USDT", "ARBITRUM", True, True, D("0"), D("0"), NOW
     )
     route = optimize(networks=(source, destination))[0]
-    assert any("BSC:" in line and "OKX=missing" in line for line in route.network_diagnostics)
-    assert any("ARBITRUM:" in line and "Binance=missing" in line for line in route.network_diagnostics)
+    bsc = next(d for d in route.network_diagnostics if d.network == "BSC")
+    arb = next(d for d in route.network_diagnostics if d.network == "ARBITRUM")
+    assert bsc.source_present and not bsc.destination_present
+    assert "red ausente en destino" in bsc.reason
+    assert not arb.source_present and arb.destination_present
+    assert "red ausente en origen" in arb.reason
