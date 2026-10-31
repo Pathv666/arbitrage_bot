@@ -4,7 +4,6 @@ from datetime import datetime
 from curl_cffi.requests import AsyncSession
 
 from ..domain.execution import Route
-from ..domain.failures import safe_collector
 from .route_alert import route_alert_lines
 
 
@@ -59,7 +58,10 @@ class TelegramNotifier:
                     raise RuntimeError("Telegram rechazó el aviso")
         except Exception:
             # No propagar URL/token en errores de transporte ni logs.
-            raise RuntimeError("No se pudo enviar aviso Telegram") from None
+            pass
+        else:
+            return
+        raise RuntimeError("No se pudo enviar aviso Telegram") from None
 
     async def notify_heartbeat(self, target, best_spread):
         pass

@@ -34,6 +34,8 @@ def failure_code(exc: Exception) -> str:
     if isinstance(exc, (ValueError, TypeError, KeyError, ArithmeticError, AttributeError, json.JSONDecodeError)):
         return "schema"
     code = getattr(exc, "code", None)
+    if not isinstance(code, int):
+        code = None
     return {5: "dns", 6: "dns", 7: "connectivity", 28: "timeout", 35: "tls", 60: "tls"}.get(code, "unavailable")
 
 
@@ -66,6 +68,6 @@ def check_api(code, *, success="0") -> None:
         return
     safe = str(code) if isinstance(code, (str, int)) else ""
     category = "clock" if safe in {"-1021", "50102", "10002"} else (
-        "authentication" if safe in {"-2014", "-2015", "50111", "50113", "10003", "10004", "100001"}
-        else "rate_limit" if safe in {"-1003", "50011", "10006"} else "api_error")
+        "authentication" if safe in {"-2014", "-2015", "50111", "50113", "10003", "10004", "100001", "100004", "100413", "100419"}
+        else "rate_limit" if safe in {"-1003", "50011", "10006", "100410"} else "api_error")
     raise CollectorError(category)
