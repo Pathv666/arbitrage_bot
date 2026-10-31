@@ -17,6 +17,7 @@ from curl_cffi.requests import AsyncSession
 
 from ..domain.execution import NetworkCost
 from ..domain.failures import safe_collector, check_http, check_api, public_failure
+from .spot_client import official_base
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +62,7 @@ class BinanceNetworkCollector:
         self.api_key = api_key
         self.api_secret = api_secret
         self.recv_window = recv_window
-        if base_url:
-            self.base_url = base_url.rstrip("/")
+        self.base_url = official_base(self.exchange, base_url or self.base_url)
 
     @safe_collector
     async def snapshot(self, asset: str) -> tuple[NetworkCost, ...]:
@@ -110,8 +110,7 @@ class OKXNetworkCollector:
         self.api_key = api_key
         self.api_secret = api_secret
         self.passphrase = passphrase
-        if base_url:
-            self.base_url = base_url.rstrip("/")
+        self.base_url = official_base(self.exchange, base_url or self.base_url)
 
     @staticmethod
     def _timestamp() -> str:
@@ -151,7 +150,7 @@ class OKXNetworkCollector:
                 # the maximum when a single fee is not present.
                 fee_raw = item.get("maxFee")
             if fee_raw in (None, ""):
-                fee_raw = item["minFee"]
+                raise ValueError("Falta fee o máximo verificado")
             result.append(NetworkCost(
                 self.exchange, asset.upper(), network,
                 _as_bool(item.get("canDep"), field="canDep"), _as_bool(item.get("canWd"), field="canWd"),
@@ -173,8 +172,7 @@ class BingXNetworkCollector:
         self.api_key = api_key
         self.api_secret = api_secret
         self.recv_window = recv_window
-        if base_url:
-            self.base_url = base_url.rstrip("/")
+        self.base_url = official_base(self.exchange, base_url or self.base_url)
 
     @safe_collector
     async def snapshot(self, asset: str) -> tuple[NetworkCost, ...]:
@@ -247,8 +245,7 @@ class BybitNetworkCollector:
         self.api_key = api_key
         self.api_secret = api_secret
         self.recv_window = recv_window
-        if base_url:
-            self.base_url = base_url.rstrip("/")
+        self.base_url = official_base(self.exchange, base_url or self.base_url)
 
     @safe_collector
     async def snapshot(self, asset: str) -> tuple[NetworkCost, ...]:

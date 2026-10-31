@@ -188,3 +188,12 @@ thuộc, kiểm tra cấu hình read-only trên laptop; scanner còn lại vẫn
 
 Khi chạy test, dùng `ENV_PATH` trỏ tới một file rỗng trong thư mục tạm để test không
 load `.env` thật. Không gửi `.env` hoặc file log cũ chưa được lọc credential.
+
+## Collectors SPOT — phạm vi dữ liệu
+
+Các collectors mới chỉ GET balance, open orders và history UNI-USDT. Binance/BingX
+đọc spot balance; OKX tách funding và trading_cash. Không dùng unrealized P&L,
+không tự coi order đang mở hoặc biến mất là đã fill. Thiếu asset/fee/timestamp hoặc
+liability không rõ làm snapshot bị từ chối. Chi tiết endpoint và giới hạn API tại
+`docs/SPOT_READ_ONLY.md`. Không chạy ví dụ place/cancel trong tài liệu exchange.
+Không cần và không được bật Trade/Withdraw để chạy các collectors này.
