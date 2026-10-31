@@ -182,7 +182,9 @@ class BingXNetworkCollector:
             "recvWindow": self.recv_window,
             "timestamp": int(time.time() * 1000),
         }
-        query = urlencode(params)
+        query = "&".join(
+            f"{key}={params[key]}" for key in sorted(params)
+        )
         signature = hmac.new(
             self.api_secret.encode(), query.encode(), hashlib.sha256
         ).hexdigest()
@@ -192,12 +194,21 @@ class BingXNetworkCollector:
         )
         async with AsyncSession() as session:
             response = await session.get(
-                url, headers={"X-BX-APIKEY": self.api_key}, timeout=10
+                url,
+                headers={
+                    "X-BX-APIKEY": self.api_key,
+                    "X-SOURCE-KEY": "BX-AI-SKILL",
+                },
+                timeout=10,
             )
         if response.status_code != 200:
             raise RuntimeError(f"BingX network metadata HTTP {response.status_code}")
         payload = response.json()
-        data = payload.get("data", payload)
+        if isinstance(payload, dict) and "code" in payload and int(payload.get("code", -1)) != 0:
+            raise RuntimeError(
+                f"BingX network metadata code={payload.get('code')}: {payload.get('msg', '')}"
+            )
+        data = payload.get("data", payload) if isinstance(payload, dict) else payload
         if isinstance(data, dict):
             data = data.get("coins") or data.get("list") or data.get("data") or []
         if not isinstance(data, list):
