@@ -218,13 +218,22 @@ def optimize_routes(books: dict[str, list[Ad]], *, asset: str, fiat: str,
                 # Los fees de compra/red ya redujeron el asset vendido.
                 extra = sum((value for key, value in deductions if key not in {"network", "p2p_buy"}), ZERO)
                 net = (sell.total_fiat-size-extra)/size*HUNDRED
-                reason = ""
-                if buy.unfilled: reason = "liquidez de compra insuficiente"
-                elif network is None: reason = "red de transferencia no confirmada o caducada"
-                elif buy.total_asset-p2p_buy/buy.effective_price < network.min_withdrawal: reason = "mínimo de retiro no alcanzado"
-                elif transferred <= 0: reason = "costes superan el inventario"
-                elif sell.unfilled: reason = "liquidez de venta insuficiente"
-                elif parties > risk.max_counterparties: reason = "demasiadas contrapartes"
+                reasons = []
+                if buy.unfilled:
+                    reasons.append("liquidez de compra insuficiente")
+                if network is None:
+                    reasons.append("red de transferencia no confirmada o caducada")
+                elif buy.total_asset-p2p_buy/buy.effective_price < network.min_withdrawal:
+                    reasons.append("mínimo de retiro no alcanzado")
+                if transferred <= 0:
+                    reasons.append("costes superan el inventario")
+                if sell.unfilled:
+                    reasons.append("liquidez de venta insuficiente")
+                if parties > risk.max_counterparties:
+                    reasons.append(
+                        f"demasiadas contrapartes ({parties}>{risk.max_counterparties})"
+                    )
+                reason = "; ".join(reasons)
                 ages = [Decimal(str((now-leg.ad.timestamp).total_seconds())) for leg in buy.legs+sell.legs]
                 executable = (sell.total_fiat/size-1)*HUNDRED
                 routes.append(Route(buy_exchange, sell_exchange, asset, fiat, size, buy, sell,
