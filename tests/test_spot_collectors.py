@@ -118,7 +118,7 @@ def test_open_order_is_not_fill_and_inconsistent_execution_rejects(raw,executed,
 def test_history_terminal_order_wins_over_earlier_open_snapshot():
     pending=order(); terminal=order('FILLED','2')
     c=AccountCollector(Client('BingX',{'/openApi/spot/v1/trade/openOrders':{'orders':[pending]},
-                                   '/openApi/spot/v1/trade/historyOrders':{'orders':[terminal],'total':1}}))
+                                   '/openApi/spot/v1/trade/historyOrders':{'orders':[terminal]}}))
     rows=asyncio.run(c.orders())
     assert len(rows)==1 and rows[0].status=='filled'
 
@@ -200,3 +200,49 @@ def test_read_permission_rejection_never_suggests_enabling_trade():
     with pytest.raises(CollectorError) as error: check_api(100004)
     assert error.value.code=='read_permission'
     assert 'no habilite Trade/Withdraw' in str(error.value)
+
+
+def test_okx_missing_zero_balance_assets_are_zero_not_schema_error():
+    c=AccountCollector(Client('OKX',{
+        '/api/v5/asset/balances':[],
+        '/api/v5/account/balance':[],
+    }))
+    rows=asyncio.run(c.balances())
+    assert [(r.scope,r.asset,r.available,r.locked) for r in rows] == [
+        ('funding','UNI',D('0'),D('0')),
+        ('funding','USDT',D('0'),D('0')),
+        ('trading_cash','UNI',D('0'),D('0')),
+        ('trading_cash','USDT',D('0'),D('0')),
+    ]
+
+
+def test_okx_partial_nonzero_response_zero_fills_missing_asset():
+    funding=[{'ccy':'USDT','availBal':'2','frozenBal':'1','bal':'3'}]
+    details=[{'ccy':'USDT','availBal':'2','cashBal':'3','frozenBal':'1','liab':''}]
+    c=AccountCollector(Client('OKX',{
+        '/api/v5/asset/balances':funding,
+        '/api/v5/account/balance':[{'details':details}],
+    }))
+    rows=asyncio.run(c.balances())
+    uni=[r for r in rows if r.asset=='UNI']
+    assert len(uni)==2 and all(r.total==0 for r in uni)
+
+
+def test_bingx_history_does_not_require_total_field():
+    pending=order(); terminal=order('FILLED','2')
+    c=AccountCollector(Client('BingX',{
+        '/openApi/spot/v1/trade/openOrders':{'orders':[pending]},
+        '/openApi/spot/v1/trade/historyOrders':{'orders':[terminal]},
+    }))
+    rows=asyncio.run(c.orders())
+    assert len(rows)==1 and rows[0].status=='filled'
+
+
+def test_bingx_fee_symbol_echo_is_optional_but_mismatch_rejected():
+    payloads=market_payloads()
+    payloads['/openApi/spot/v1/user/commissionRate'].pop('symbol')
+    fee=asyncio.run(BingXMarketCollector(Client('BingX',payloads)).fees())
+    assert fee.taker_rate==D('.002')
+    payloads['/openApi/spot/v1/user/commissionRate']['symbol']='OTHER-USDT'
+    with pytest.raises(CollectorError):
+        asyncio.run(BingXMarketCollector(Client('BingX',payloads)).fees())
