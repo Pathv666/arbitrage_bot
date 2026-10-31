@@ -15,6 +15,7 @@ from rich.console import Console
 
 from .application.monitor import MonitorService
 from .application.scanner import ScannerService
+from .application.ports import RouteNotifier
 from .infrastructure.exchanges import BinanceSource, OKXSource, BybitSource, BingXSource, ResilientSource
 from .infrastructure.scanner_output import ManualNetworkCosts, ScannerStatus
 from .infrastructure.telegram_notifier import TelegramNotifier
@@ -234,7 +235,7 @@ async def run_scanner(defaults: Defaults) -> None:
     if defaults.poll_interval_s <= 0 or defaults.rows <= 0 or not defaults.max_fiat.is_finite() or defaults.max_fiat <= 0 or not defaults.threshold_pct.is_finite():
         raise ValueError("Intervalo, filas o tamaño V1 inválidos")
     repo = SQLiteRepository(defaults.db_path)
-    notifiers = [ConsoleNotifier(beep=defaults.beep, console=console)]
+    notifiers: list[RouteNotifier] = [ConsoleNotifier(beep=defaults.beep, console=console)]
     if defaults.screenshots_enabled:
         notifiers.append(ScreenshotNotifier(defaults.screenshots_dir, enabled=True))
     if settings.telegram_token and settings.telegram_chat_id:

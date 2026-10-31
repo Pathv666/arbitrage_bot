@@ -93,3 +93,38 @@ Nuevos:
 Próxima fase: fixtures sanitizados de esquemas reales, mapping de pagos verificado,
 paginación y proveedor dinámico de costes de red. Mantener la ejecución de fondos
 fuera de este scanner.
+
+## Seguimiento del review de PR #1: alertas multi-leg
+
+Finding: https://github.com/Pathv666/arbitrage_bot/pull/1#issuecomment-6540684316
+
+Se elimina `ScannerService.as_opportunity()`: V1 entrega la `Route` completa y su
+fecha al puerto `RouteNotifier.notify_route`. Console, Telegram y screenshots
+usan una presentación común nueva en `infrastructure/route_alert.py`, con
+exchanges, tamaño, precios efectivos agrupados, todos los legs, comerciantes y
+pagos, contrapartes totales, red, net edge y edad al detectar. Los enlaces abren
+los libros públicos de Binance/OKX/Bybit en la dirección del usuario; BingX
+explicita que no hay enlace verificado. No se hacen deep-links ficticios a ads.
+
+Telegram divide avisos largos en partes numeradas dentro del límite de tamaño,
+sin truncar legs, incluidos nombres Unicode. La ficha PNG tiene altura dinámica,
+texto completo en metadatos y escritura atómica. El monitor legado mantiene su
+puerto `Notifier.notify_opportunity`; ninguna ruta V1 pasa por ese esquema.
+No se modifica la ejecución de fondos ni se añaden acciones de trading.
+
+Validación del seguimiento:
+
+- `venv/bin/python -m pytest`: **204 passed** (192 anteriores + 12 regresiones).
+- Golden de 47,3m: scanner y notifiers reales muestran **3 legs de compra, 2 de
+  venta, 5 contrapartes**, precio de compra **25.788,98728513**, todos los merchants,
+  métodos, red, contexto y links. Se comprueba gating y cooldown sin enviar
+  mensajes Telegram reales.
+- Regresiones de enlaces por exchange/lado, límites UTF-16 de Telegram sin pérdida
+  de texto, redacción del token en errores, screenshot desactivado y compatibilidad
+  de notificaciones legadas. El wiring de runtime comprueba los tres canales V1.
+- `venv/bin/python -m compileall -q src tests scripts` y `git diff --check`: correctos.
+- No hay lint/type checker configurados. No se añaden dependencias.
+
+Archivos del seguimiento: `application/ports.py`, `application/scanner.py`,
+`main.py`, los tres notifiers, el nuevo `infrastructure/route_alert.py`,
+`tests/test_route_alerts.py`, `tests/test_scanner_v1.py`, README y este informe.

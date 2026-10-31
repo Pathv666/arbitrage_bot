@@ -120,6 +120,13 @@ respeta `ENV_PATH`. Principales grupos:
   `ALERT_COOLDOWN_SECONDS`. Un ciclo sin ruta rentable reinicia su continuidad;
   reiniciar proceso también reinicia el gating. Telegram opcional usa
   `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID`; requiere egress a `api.telegram.org`.
+- Los avisos V1 de consola, Telegram y screenshots reciben la ruta completa,
+  sin convertirla a un anuncio único. Incluyen exchanges, tamaño solicitado,
+  precios efectivos agrupados, todos los legs con importes, comerciantes y pagos,
+  contrapartes totales, red, margen neto y edad de quotes al detectar. Los enlaces
+  abren libros públicos de Binance/OKX/Bybit en el lado del usuario; no reservan
+  ni ejecutan anuncios. BingX indica enlace no verificado. Telegram divide avisos
+  largos en partes numeradas sin omitir legs; las fichas PNG ajustan su altura.
 - Dashboard y autenticación: `DASHBOARD_*`, `ENV_PATH`, `BOT_PIDFILE`, `TRADES_DB_PATH`.
 
 Los timestamps mostrados son ISO con zona; no se oculta la antigüedad del último

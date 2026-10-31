@@ -20,11 +20,15 @@ import hashlib
 import logging
 import os
 import tempfile
+from datetime import datetime
 from decimal import Decimal
 
 from PIL import Image, ImageDraw, ImageFont
+from PIL.PngImagePlugin import PngInfo
 
+from ..domain.execution import Route
 from ..domain.models import Opportunity, WatchTarget
+from .route_alert import route_alert_lines
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +87,41 @@ class ScreenshotNotifier:
             await asyncio.to_thread(self._render, opp, path)
         except Exception as exc:  # noqa: BLE001 — no debe tumbar el ciclo del bot
             logger.warning("No se pudo guardar la captura en %s: %s", path, exc)
+
+    async def notify_route(self, route: Route, detected_at: datetime) -> None:
+        if not self._enabled:
+            return
+        ts = detected_at.astimezone().strftime("%Y%m%d_%H%M%S")
+        shortid = hashlib.sha1(repr(route).encode()).hexdigest()[:8]
+        path = os.path.join(self._dir, f"{ts}_{route.asset}-{route.fiat}_route_{shortid}.png")
+        try:
+            await asyncio.to_thread(self._render_route, route, detected_at, path)
+        except Exception as exc:
+            logger.warning("No se pudo guardar la captura de ruta en %s: %s", path, exc)
+
+    def _render_route(self, route: Route, detected_at: datetime, path: str) -> None:
+        """Altura dinámica: ningún leg queda fuera de la ficha por un recorte fijo."""
+        os.makedirs(self._dir, exist_ok=True)
+        font = _font(18)
+        width, margin, line_height = 960, 28, 26
+        measure = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        text = "\n".join(route_alert_lines(route, detected_at))
+        wrapped = []
+        for line in text.splitlines():
+            current = ""
+            for character in line:
+                if current and measure.textlength(current + character, font=font) > width - 2*margin:
+                    wrapped.append(current)
+                    current = ""
+                current += character
+            wrapped.append(current)
+        img = Image.new("RGB", (width, 2*margin + line_height*len(wrapped)), _BG)
+        draw = ImageDraw.Draw(img)
+        for index, line in enumerate(wrapped):
+            draw.text((margin, margin + index*line_height), line, font=font, fill=_FG)
+        metadata = PngInfo()
+        metadata.add_text("route_alert", text)
+        self._save_image(img, path, pnginfo=metadata)
 
     @staticmethod
     def _filename(opp: Opportunity) -> str:
@@ -166,11 +205,15 @@ class ScreenshotNotifier:
             fill=_MUTED,
         )
 
+        self._save_image(img, path)
+
+    @staticmethod
+    def _save_image(img: Image.Image, path: str, *, pnginfo: PngInfo | None = None) -> None:
         directory = os.path.dirname(os.path.abspath(path))
         fd, tmp = tempfile.mkstemp(dir=directory, suffix=".tmp")
         try:
             with os.fdopen(fd, "wb") as fh:
-                img.save(fh, format="PNG")
+                img.save(fh, format="PNG", pnginfo=pnginfo)
             os.replace(tmp, path)  # rename atómico
         except BaseException:
             with contextlib.suppress(OSError):

@@ -56,7 +56,7 @@ class Source:
 
 class Notifier:
     def __init__(self): self.alerts = []
-    async def notify_opportunity(self, opp): self.alerts.append(opp)
+    async def notify_route(self, route, detected_at): self.alerts.append(route)
 
 
 def test_one_exchange_and_bingx_down_scanner_continues_with_gated_alert(tmp_path):
@@ -143,10 +143,13 @@ def test_v1_default_runtime_wires_only_read_sources(monkeypatch, tmp_path):
         captured["service"] = self
         captured["targets"] = targets
     monkeypatch.setattr(ScannerService, "run_forever", run)
-    defaults = Defaults(db_path=str(tmp_path/"db"), beep=False)
+    defaults = Defaults(db_path=str(tmp_path/"db"), beep=False, screenshots_enabled=True,
+                        scanner=ScannerSettings(telegram_token="test-token", telegram_chat_id="test-chat"))
     asyncio.run(main.amain(defaults))
     assert set(captured["service"].sources) == {"Binance", "OKX", "Bybit"}
     assert captured["targets"][0].fiat == "VND"
+    assert len(captured["service"].notifiers) == 3
+    assert all(callable(n.notify_route) for n in captured["service"].notifiers)
 
 
 def test_env_path_prevents_loading_repo_env(monkeypatch, tmp_path):
@@ -160,7 +163,7 @@ def test_env_path_prevents_loading_repo_env(monkeypatch, tmp_path):
 
 def test_notifier_failure_does_not_stop_publishing(tmp_path):
     class BrokenNotifier:
-        async def notify_opportunity(self, opp): raise RuntimeError("notifier unavailable")
+        async def notify_route(self, route, detected_at): raise RuntimeError("notifier unavailable")
     async def check():
         repo = SQLiteRepository(str(tmp_path/"db"))
         settings = ScannerSettings(risk=RISK, alert_min_scans=1, alert_min_seconds=0)

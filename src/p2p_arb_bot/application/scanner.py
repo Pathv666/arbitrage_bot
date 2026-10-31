@@ -3,13 +3,12 @@ import asyncio
 import logging
 from dataclasses import replace
 from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Mapping
 
 from ..domain.execution import Route, optimize_routes
-from ..domain.models import Opportunity, WatchTarget
+from ..domain.models import WatchTarget
 from ..scanner_config import ScannerSettings
-from .ports import MarketDataSource, NetworkCostProvider, Notifier, ScanPublisher, ScanRepository
+from .ports import MarketDataSource, NetworkCostProvider, RouteNotifier, ScanPublisher, ScanRepository
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 class ScannerService:
     def __init__(self, sources: Mapping[str, MarketDataSource], repository: ScanRepository,
                  publisher: ScanPublisher, network_provider: NetworkCostProvider,
-                 settings: ScannerSettings, notifiers: list[Notifier]):
+                 settings: ScannerSettings, notifiers: list[RouteNotifier]):
         self.sources = sources
         self.repository = repository
         self.publisher = publisher
@@ -80,10 +79,9 @@ class ScannerService:
                 continue
             if old_alert and (now-old_alert).total_seconds() < self.settings.alert_cooldown_seconds:
                 continue
-            opp = self.as_opportunity(route, now)
             for notifier in self.notifiers:
                 try:
-                    await notifier.notify_opportunity(opp)
+                    await notifier.notify_route(route, now)
                 except Exception:
                     logger.exception("Fallo aislado del notificador")
             self.last_alert[key] = now
@@ -95,18 +93,6 @@ class ScannerService:
         except Exception:
             logger.exception("No se pudo publicar estado")
         return routes
-
-    @staticmethod
-    def as_opportunity(route: Route, now: datetime) -> Opportunity:
-        buy, sell = route.buy.legs[0].ad, route.sell.legs[0].ad
-        return Opportunity(now, route.fiat, route.asset,
-                           f"{route.buy_exchange}: {', '.join(buy.pay_methods)}",
-                           f"{route.sell_exchange}: {', '.join(sell.pay_methods)}",
-                           route.buy.effective_price, route.sell.effective_price,
-                           route.gross_spread_pct, route.net_edge_pct, route.buy.total_asset,
-                           buy.adv_no, sell.adv_no, buy.advertiser_name, sell.advertiser_name,
-                           "", "", est_profit_fiat=route.requested_size*route.net_edge_pct/100,
-                           est_profit_usdt=route.buy.total_asset*route.net_edge_pct/100)
 
     async def run_forever(self, targets: list[WatchTarget], interval_s: float) -> None:
         while True:

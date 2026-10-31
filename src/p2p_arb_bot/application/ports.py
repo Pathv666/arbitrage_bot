@@ -68,6 +68,12 @@ class Notifier(Protocol):
     ) -> None: ...
 
 
+class RouteNotifier(Protocol):
+    """Aviso V1 con la ruta completa, sin convertirla a un anuncio legado."""
+
+    async def notify_route(self, route: Route, detected_at: datetime) -> None: ...
+
+
 class NetworkCostProvider(Protocol):
     """Snapshot manual hoy; actualización dinámica inyectable en el futuro."""
     async def snapshot(self) -> tuple["NetworkCost", ...]: ...
