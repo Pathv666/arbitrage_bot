@@ -23,7 +23,8 @@ class BingXMarketCollector:
         def levels(key, reverse):
             out=tuple((decimal(p),decimal(q)) for p,q in data[key])
             if not out or any(p<=0 or q<=0 for p,q in out): raise CollectorError('schema')
-            if out!=tuple(sorted(out,key=lambda v:v[0],reverse=reverse)): raise CollectorError('schema')
+            # BingX puede devolver asks descendentes; normalizar antes de VWAP/top-of-book.
+            out=tuple(sorted(out,key=lambda v:v[0],reverse=reverse))
             if len({p for p,q in out})!=len(out): raise CollectorError('schema')
             return out
         bids=levels('bids',True); asks=levels('asks',False)

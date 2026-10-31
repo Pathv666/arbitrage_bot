@@ -224,6 +224,10 @@ class NetworkDiagnostic:
     destination_deposit_enabled: bool
     destination_fresh: bool
     reason: str
+    source_timestamp: datetime | None = None
+    destination_timestamp: datetime | None = None
+    source_age_s: Decimal | None = None
+    destination_age_s: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,6 +307,10 @@ def _network_diagnostics(
             bool(destination and destination.deposit_enabled),
             destination_fresh,
             "; ".join(reasons),
+            source_timestamp=source.timestamp if source else None,
+            destination_timestamp=destination.timestamp if destination else None,
+            source_age_s=Decimal(str((now-source.timestamp).total_seconds())) if source and source.timestamp.tzinfo else None,
+            destination_age_s=Decimal(str((now-destination.timestamp).total_seconds())) if destination and destination.timestamp.tzinfo else None,
         ))
     if not result:
         result.append(NetworkDiagnostic(

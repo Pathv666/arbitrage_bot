@@ -50,3 +50,11 @@ class ScannerStatus(StatusNotifier):
         }
         self._write({"scanner_v1": True, "targets": self.targets,
                      "target": target.label, "best_net_pct": float(feasible[0]["net_edge_pct"]) if feasible else None})
+
+
+class PrivateAccountStatus(StatusNotifier):
+    async def publish_private(self, snapshot: dict) -> None:
+        # Nunca comparte balances con el status público del scanner.
+        from ..domain.failures import CollectorError
+        if not self._write(json.loads(json.dumps(snapshot, default=json_value))):
+            raise CollectorError("unavailable")

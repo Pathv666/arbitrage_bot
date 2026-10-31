@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class ScannerService:
     def __init__(self, sources: Mapping[str, MarketDataSource], repository: ScanRepository,
                  publisher: ScanPublisher, network_provider: NetworkCostProvider,
-                 settings: ScannerSettings, notifiers: list[RouteNotifier]):
+                 settings: ScannerSettings, notifiers: list[RouteNotifier], account_monitor=None):
         self.sources = sources
         self.repository = repository
         self.publisher = publisher
@@ -28,6 +28,7 @@ class ScannerService:
         self.streaks = {}
         self.last_alert = {}
         self.events = EventMonitor(notifiers)
+        self.account_monitor = account_monitor
 
     async def run_cycle(self, target: WatchTarget) -> list[Route]:
         health = {}
@@ -41,7 +42,7 @@ class ScannerService:
                     for side in ("BUY", "SELL")), return_exceptions=True)
                 errors = [r for r in results if isinstance(r, BaseException)]
                 if errors:
-                    raise RuntimeError("; ".join(str(e) for e in errors))
+                    raise errors[0]
                 books[name] = results[0]+results[1]
                 health[name] = {"status": "ok" if books[name] else "empty", "ads": len(books[name]),
                                 "datasource": "EXPERIMENTAL_API" if name == "BingX" else "PUBLIC_WEB_ENDPOINT"}
@@ -67,6 +68,12 @@ class ScannerService:
         # Dynamic network snapshots are timestamped during snapshot(). Take the
         # optimization clock afterwards so freshly collected metadata is never
         # rejected as "from the future" by a few milliseconds.
+        if self.account_monitor is not None:
+            try:
+                health['accounts'] = self.account_monitor.public_health()
+            except Exception:
+                logger.warning('Account monitor unavailable; datos privados descartados')
+                health['accounts'] = {'status':'error','code':'unavailable'}
         now = datetime.now(timezone.utc)
         risk = replace(self.settings.risk, allowed_payments=target.pay_methods,
                        require_verified=target.merchant_check, outlier_pct=target.outlier_max_dev_pct)

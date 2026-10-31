@@ -48,7 +48,8 @@ def test_scan_route_threshold_network_and_collector_transitions():
         assert by_category["collector_health"] == ["error:timeout", "ok:ok"]
         assert len(by_category["network_status"]) == 6
         await monitor.scan("scope", [], failed, (), Decimal("0.1"), now)
-        assert sink.events[-1].state in {"below", "rejected"}
+        assert any(e.category=="route_status" and e.state=="rejected" for e in sink.events)
+        assert len([e for e in sink.events if e.category=="network_status" and e.state=="unknown"])==3
     asyncio.run(run())
 
 
@@ -90,3 +91,23 @@ def test_missing_fee_rejects_entire_network_snapshot(monkeypatch):
     with pytest.raises(CollectorError) as error:
         asyncio.run(nm.BinanceNetworkCollector("fixture","fixture").snapshot("USDT"))
     assert error.value.code=="schema"
+
+
+def test_successful_console_does_not_hide_failed_telegram_and_retry_is_per_channel():
+    class Flaky(Sink):
+        fail=True
+        async def notify_event(self,event):
+            if self.fail: raise RuntimeError('fixture transport unavailable')
+            self.events.append(event)
+    async def run():
+        console=Sink(); telegram=Flaky(); monitor=EventMonitor([console,telegram],cooldown_s=0)
+        now=datetime.now(timezone.utc)
+        await monitor.observe('health','BingX','ok','ok',now)
+        await monitor.observe('health','BingX','error','error',now)
+        assert len(console.events)==1 and not telegram.events
+        telegram.fail=False
+        await monitor.observe('health','BingX','error','error',now)
+        assert len(console.events)==1 and len(telegram.events)==1
+        await monitor.observe('health','BingX','error','error',now)
+        assert len(telegram.events)==1
+    asyncio.run(run())

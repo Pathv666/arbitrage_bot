@@ -47,3 +47,7 @@ capturas_oportunidades/
 
 # Artefactos de Playwright MCP (capturas de trabajo, no del repo)
 .playwright-mcp/
+
+# Snapshots privados de account monitor
+account_status.json
+uni_readonly_report.json

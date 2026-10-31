@@ -465,3 +465,24 @@ Los collectors configurados fallan cerrados: no reutilizan manual snapshots del
 mismo exchange tras fallar. Telegram observa transiciones de health, red,
 feasibilidad y threshold con dedup/cooldown de 180s, además de los avisos de ruta.
 Véase `docs/LOCAL_WINDOWS.md` para validación sin leer el `.env` real durante tests.
+
+### Account / order monitor SPOT và checkpoint UNI
+
+Opt-in `ACCOUNT_MONITOR_ENABLED=true` o Windows `run_scanner.ps1 -Accounts` añade
+un monitor independiente en background, para no bloquear el scanner P2P. Cuenta
+Binance/OKX/BingX: UNI y USDT, available/locked y timestamp; órdenes UNI-USDT con
+estado y cantidad ejecutada explícitos, con límites de cobertura de cada API.
+Balances y órdenes se guardan en `account_status.json` privado y en un panel con
+login; el status público solo contiene health. No se usa unrealized P&L como cash
+ni se interpreta la desaparición de un open order como fill.
+
+`python -m p2p_arb_bot.uni_review --public-only` consulta BingX market sin leer .env.
+Solo en laptop, `--load-local-env` permite al proceso firmar GET con credenciales
+Read ya existentes. `--watch --notify` habilita alertas por cambio/error mediante
+Telegram configurado localmente. No hay flags de venta, cancelación o permisos.
+
+El checkpoint requiere snapshots completos, frescos y consistentes, balances
+reales, órdenes y comisión autenticada. Falta de acceso devuelve BLOCKED, no cero
+ni fee supuesta. Ninguna comisión estimada o neto hipotético se suma al cash.
+Las rutas de salida se validan para no sobrescribir .env ni el status público.
+Véanse `docs/SPOT_READ_ONLY.md` y el procedimiento en `docs/LOCAL_WINDOWS.md`.

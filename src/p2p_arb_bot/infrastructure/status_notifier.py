@@ -58,7 +58,7 @@ class StatusNotifier:
             }
         )
 
-    def _write(self, extra: dict) -> None:
+    def _write(self, extra: dict) -> bool:
         payload = {
             "last_update": datetime.now(timezone.utc).astimezone().isoformat(),
             "last_opportunity": self._last_opportunity,
@@ -71,9 +71,11 @@ class StatusNotifier:
                 with os.fdopen(fd, "w", encoding="utf-8") as fh:
                     json.dump(payload, fh, ensure_ascii=False)
                 os.replace(tmp, self._path)  # rename atómico
+                return True
             except BaseException:
                 with contextlib.suppress(OSError):
                     os.unlink(tmp)
                 raise
         except OSError as exc:  # no debe tumbar el ciclo del bot
-            logger.warning("No se pudo escribir el estado en %s: %s", self._path, exc)
+            logger.warning("No se pudo escribir snapshot de estado (error de archivo)")
+            return False

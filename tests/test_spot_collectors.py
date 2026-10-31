@@ -151,7 +151,7 @@ def test_official_market_depth_symbols_and_account_fee_contracts():
     assert len(m.bids)==2 and fee.taker_rate==D('.002')
 
 
-@pytest.mark.parametrize('change',['stale','crossed','missing_ts','nan','unordered','missing_fee','wrong_symbol'])
+@pytest.mark.parametrize('change',['stale','crossed','missing_ts','nan','duplicate','missing_fee','wrong_symbol'])
 def test_incomplete_market_and_fee_inputs_fail_closed(change):
     payloads=market_payloads()
     depth=payloads['/openApi/spot/v1/market/depth']
@@ -159,7 +159,7 @@ def test_incomplete_market_and_fee_inputs_fail_closed(change):
     if change=='crossed': depth['bids'][0][0]='8'
     if change=='missing_ts': depth.pop('ts')
     if change=='nan': depth['bids'][0][0]='NaN'
-    if change=='unordered': depth['bids'].reverse()
+    if change=='duplicate': depth['bids'].append(depth['bids'][0])
     if change=='missing_fee': payloads['/openApi/spot/v1/user/commissionRate'].pop('takerCommissionRate')
     if change=='wrong_symbol': payloads['/openApi/spot/v1/ticker/bookTicker'][0]['symbol']='OTHER-USDT'
     c=BingXMarketCollector(Client('BingX',payloads))
@@ -177,6 +177,26 @@ def test_binance_and_okx_order_query_contracts():
     for exchange,payloads in [
         ('Binance',{'/api/v3/openOrders':[order()],'/api/v3/allOrders':[order('FILLED','2')]}),
         ('OKX',{'/api/v5/trade/orders-pending':[], '/api/v5/trade/orders-history':[
-            {'ordId':'1','instId':'UNI-USDT','instType':'SPOT','side':'sell','sz':'2','accFillSz':'2','state':'filled','uTime':int(now().timestamp()*1000)}]})]:
+            {'ordId':'1','instId':'UNI-USDT','instType':'SPOT','tdMode':'cash','side':'sell','sz':'2','accFillSz':'2','state':'filled','uTime':int(now().timestamp()*1000)}]})]:
         rows=asyncio.run(AccountCollector(Client(exchange,payloads)).orders())
         assert rows[0].status=='filled'
+
+
+def test_margin_spot_order_is_not_cash_spot_order():
+    row={'ordId':'1','instId':'UNI-USDT','instType':'SPOT','tdMode':'cross','side':'sell',
+         'sz':'2','accFillSz':'0','state':'live','uTime':int(now().timestamp()*1000)}
+    with pytest.raises(CollectorError): AccountCollector(Client('OKX',{})).parse_order(row,'open')
+
+
+def test_bingx_reverse_ask_order_is_normalized_before_quote_comparison():
+    payloads=market_payloads()
+    payloads['/openApi/spot/v1/market/depth']['asks']=[['7.3','1'],['7.1','10']]
+    result=asyncio.run(BingXMarketCollector(Client('BingX',payloads)).market())
+    assert result.asks[0][0]==D('7.1') and result.consistent
+
+
+def test_read_permission_rejection_never_suggests_enabling_trade():
+    from p2p_arb_bot.domain.failures import check_api
+    with pytest.raises(CollectorError) as error: check_api(100004)
+    assert error.value.code=='read_permission'
+    assert 'no habilite Trade/Withdraw' in str(error.value)

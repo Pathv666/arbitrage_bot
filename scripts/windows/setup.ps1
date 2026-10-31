@@ -38,7 +38,7 @@ if (-not (Test-Path ".env")) {
 }
 
 Write-Host "Running unit/regression tests..."
-& $venvPython -m pytest
+& (Join-Path $PSScriptRoot "test.ps1")
 if ($LASTEXITCODE -ne 0) { throw "Tests failed." }
 
 Write-Host ""

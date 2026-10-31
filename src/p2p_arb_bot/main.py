@@ -16,6 +16,11 @@ from rich.console import Console
 
 from .application.monitor import MonitorService
 from .application.scanner import ScannerService
+from .application.account_monitor import AccountMonitor
+from .infrastructure.spot_client import SpotReadClient
+from .infrastructure.spot_collectors import AccountCollector
+from .infrastructure.spot_market import BingXMarketCollector
+from .infrastructure.scanner_output import PrivateAccountStatus
 from .application.ports import RouteNotifier
 from .infrastructure.exchanges import BinanceSource, OKXSource, BybitSource, BingXSource, ResilientSource
 from .infrastructure.scanner_output import ManualNetworkCosts, ScannerStatus
@@ -247,42 +252,31 @@ async def run_scanner(defaults: Defaults) -> None:
     collectors = {}
 
     def pair(prefix: str) -> tuple[str, str]:
-        key = os.getenv(f"{prefix}_API_KEY", "")
-        secret = os.getenv(f"{prefix}_API_SECRET", "")
-        if bool(key) != bool(secret):
-            raise ValueError(f"{prefix}: API_KEY y API_SECRET deben configurarse juntos")
-        return key, secret
+        return os.getenv(f"{prefix}_API_KEY", ""), os.getenv(f"{prefix}_API_SECRET", "")
 
     binance_key, binance_secret = pair("BINANCE")
-    if binance_key and "Binance" in settings.exchanges:
-        collectors["Binance"] = BinanceNetworkCollector(
-            binance_key, binance_secret,
-            base_url=os.getenv("BINANCE_API_BASE_URL") or None,
-        )
-
     okx_key, okx_secret = pair("OKX")
     okx_passphrase = os.getenv("OKX_API_PASSPHRASE", "")
-    if bool(okx_key) != bool(okx_passphrase):
-        raise ValueError("OKX: API_KEY/API_SECRET/API_PASSPHRASE deben configurarse juntos")
-    if okx_key and "OKX" in settings.exchanges:
-        collectors["OKX"] = OKXNetworkCollector(
-            okx_key, okx_secret, okx_passphrase,
-            base_url=os.getenv("OKX_API_BASE_URL") or None,
-        )
-
     bybit_key, bybit_secret = pair("BYBIT")
-    if bybit_key and "Bybit" in settings.exchanges:
-        collectors["Bybit"] = BybitNetworkCollector(
-            bybit_key, bybit_secret,
-            base_url=os.getenv("BYBIT_API_BASE_URL") or None,
-        )
-
     bingx_key, bingx_secret = pair("BINGX")
-    if bingx_key:
-        collectors["BingX"] = BingXNetworkCollector(
-            bingx_key, bingx_secret,
-            base_url=os.getenv("BINGX_API_BASE_URL") or None,
-        )
+    from .domain.failures import CollectorError, failure_code
+    from .infrastructure.network_metadata import UnavailableNetworkCollector
+    specs = [
+        ("Binance", BinanceNetworkCollector, (binance_key,binance_secret)),
+        ("OKX", OKXNetworkCollector, (okx_key,okx_secret,okx_passphrase)),
+        ("Bybit", BybitNetworkCollector, (bybit_key,bybit_secret)),
+        ("BingX", BingXNetworkCollector, (bingx_key,bingx_secret)),
+    ]
+    for name,factory,credentials in specs:
+        if name != 'BingX' and name not in settings.exchanges:
+            continue
+        if not any(credentials):
+            continue
+        try:
+            if not all(credentials): raise CollectorError('not_configured')
+            collectors[name] = factory(*credentials, base_url=os.getenv(name.upper()+'_API_BASE_URL') or None)
+        except Exception as exc:
+            collectors[name] = UnavailableNetworkCollector(failure_code(exc))
 
     network_provider = (
         AutoNetworkCosts(
@@ -292,12 +286,30 @@ async def run_scanner(defaults: Defaults) -> None:
         if collectors
         else ManualNetworkCosts(settings.networks)
     )
+    account_monitor = None
+    if settings.account_monitor_enabled:
+        from .uni_review import validate_output
+        validate_output(settings.account_status_path)
+        if os.path.realpath(settings.account_status_path)==os.path.realpath(defaults.status_path):
+            raise ValueError("El snapshot privado debe ser distinto del status público")
+        from .uni_review import configured_clients
+        clients = configured_clients()
+        account_monitor = AccountMonitor(
+            {name: AccountCollector(client) for name,client in clients.items()},
+            BingXMarketCollector(clients['BingX']), PrivateAccountStatus(settings.account_status_path),
+            notifiers, refresh_s=settings.account_refresh_s, ttl_s=settings.account_ttl_s,
+            min_changes={'UNI':settings.balance_min_uni,'USDT':settings.balance_min_usdt},
+        )
+    monitor_task = asyncio.create_task(account_monitor.run_forever()) if account_monitor else None
     service = ScannerService(sources, repo, ScannerStatus(defaults.status_path),
-                             network_provider, settings, notifiers)
+                             network_provider, settings, notifiers, account_monitor=account_monitor)
     console.print("[bold green]Scanner V1 · solo lectura[/] " + ", ".join(sources))
     try:
         await service.run_forever(targets, defaults.poll_interval_s)
     finally:
+        if monitor_task:
+            monitor_task.cancel()
+            await asyncio.gather(monitor_task, return_exceptions=True)
         await asyncio.gather(*(s.aclose() for s in sources.values()), return_exceptions=True)
         repo.close()
 

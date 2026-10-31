@@ -197,3 +197,97 @@ không tự coi order đang mở hoặc biến mất là đã fill. Thiếu asse
 liability không rõ làm snapshot bị từ chối. Chi tiết endpoint và giới hạn API tại
 `docs/SPOT_READ_ONLY.md`. Không chạy ví dụ place/cancel trong tài liệu exchange.
 Không cần và không được bật Trade/Withdraw để chạy các collectors này.
+
+## Checkpoint trước khi bán UNI trên BingX — KHÔNG GỬI ORDER
+
+Nhánh delivery cuối: `feat/uni-readonly-checkpoint`, gồm các PR apilados #13 → #14
+→ PR checkpoint. Chưa merge; không chạy `reset --hard` hoặc `git clean` để cập nhật.
+
+```powershell
+cd C:\Users\pc\arbitrage_bot
+git status --short --branch
+git fetch origin
+git switch --track origin/feat/uni-readonly-checkpoint
+.\scripts\windows\setup.ps1
+```
+
+Nếu nhánh local đã tồn tại, dùng `git switch feat/uni-readonly-checkpoint` rồi
+`git pull --ff-only`. Nếu Git báo file local xung đột, dừng phần cập nhật đó;
+không xóa file hay ghi đè `.env`. Setup giữ nguyên `.env` hiện hữu. Test helper mới
+`test.ps1` dùng ENV_PATH tạm rỗng, restore biến process sau test, không đọc `.env` thật.
+
+### Bước 1 — chỉ market data công khai
+
+```powershell
+.\scripts\windows\uni_review.ps1 -PublicOnly
+```
+
+Không load `.env` hay credential. Tạo `uni_readonly_report.json` với market data
+và health; exit code 2/BLOCKED là đúng vì balance và fee tài khoản còn unknown.
+Bid/ask, depth, min/max, tick/step phải mới. Asks của BingX được sắp xếp tăng dần
+trước khi tính top-of-book; không giả định thứ tự response.
+
+### Bước 2 — đọc tài khoản bằng credential Read hiện có trên laptop
+
+```powershell
+.\scripts\windows\uni_review.ps1
+```
+
+Chỉ tiến trình local load credential để ký GET; không in key/secret/passphrase.
+Không truyền credential trong command line. Không đổi API permissions. Nếu Read
+bị từ chối hoặc commission endpoint đòi Trade, giữ BLOCKED; **không bật Trade**.
+Kiểm tra IP whitelist, clock, region và quyền Read hiện hữu ngay trên laptop.
+Thiếu dữ liệu nào thì dừng phần phụ thuộc đó, các collectors khác vẫn chạy.
+
+### Bước 3 — chạy monitor và Telegram (nếu đã cấu hình local)
+
+```powershell
+.\scripts\windows\uni_review.ps1 -Watch -Notify
+# Hoặc scanner P2P + account monitor background:
+.\scripts\windows\run_scanner.ps1 -Accounts
+```
+
+Dùng một cách chạy phù hợp, tránh hai tiến trình cùng gửi alert giống nhau.
+`-Notify` chỉ gửi notification qua Telegram đã cấu hình, không nhận lệnh trading.
+Token/chat chỉ ở local. Nếu chưa có cấu hình hoặc network tới api.telegram.org
+không hoạt động, ghi lại health code, không gửi key/token cho người khác.
+
+`run_scanner -Accounts` ghi account_status.json riêng với status.json công khai.
+Dashboard account pane yêu cầu login và không cache response. Không in balance
+vào public status. Snapshot hết TTL sẽ không được trình bày là available hiện tại.
+Snapshot I/O lỗi cũng chặn checkpoint. `.env`, status và report không được commit.
+
+### Checklist review bán UNI (chỉ đọc)
+
+- Binance/OKX/BingX collector health đều rõ ràng và snapshot còn hạn.
+- BingX spot UNI **free/locked** và USDT free/locked đã xác nhận bằng GET mới.
+- Open/partial orders UNI-USDT được đọc riêng; không coi chúng là fill. Nếu order
+  đang theo dõi biến mất mà history không xác nhận, trạng thái incomplete/BLOCKED.
+- Fee maker/taker cá nhân có timestamp; không tự giả định fee=0.
+- Bid/ask và depth mới, nhất quán; quantity được làm tròn xuống stepSize.
+- Giới hạn minQty/maxQty/minNotional/maxNotional được kiểm tra.
+- Hypothetical VWAP, depth legs, remainder và slippage cho UNI **available**, không
+  cho locked hoặc total. Net quote equivalent không phải USDT cash hiện có.
+- Xác nhận fee asset/discounts và lượng UNI muốn bán bằng đánh giá thủ công;
+  báo cáo mô phỏng toàn bộ free không phải khuyến nghị bán toàn bộ.
+- Không leverage/borrow/transfer/withdraw, không bật Trade và không gửi order.
+
+Chỉ khi mọi dữ liệu bắt buộc thành công và không còn open order cần review,
+report mới ghi `READY_FOR_UNI_SELL_REVIEW`. Đây vẫn là checkpoint xem xét, không
+ủy quyền thực thi. Chia sẻ nếu cần chỉ các trường health/balance/market/fee đã lọc
+trong report; tuyệt đối không chia sẻ `.env`, API keys, passphrase hay log cũ.
+
+Có thể kiểm tra Telegram mà không đổi balance/order bằng:
+
+```powershell
+.\scripts\windows\uni_review.ps1 -Notify -TestNotification
+```
+
+Lệnh chỉ gửi một thông báo test tới chat đã cấu hình, sau đó chạy GET checkpoint.
+Console gửi thành công không che lỗi Telegram: channel lỗi được retry riêng,
+channel đã nhận không bị gửi lại. Không cần tạo order để gây notification.
+
+Lưu ý privacy: log/stdout cũ của bot có thể được dashboard đọc công khai. Vì vậy
+console chỉ ghi “Cambio privado SPOT” cho balance/order changes, không ghi lượng
+balance, order ID hoặc quantity; chi tiết chỉ ở snapshot/pane riêng hoặc Telegram.
+Không chia sẻ log cũ từ trước khi hardening, vì phiên bản cũ có thể chứa exception.

@@ -85,3 +85,7 @@ class ScanRepository(Protocol):
 
 class ScanPublisher(Protocol):
     async def publish(self, target: WatchTarget, routes: list["Route"], health: dict) -> None: ...
+
+
+class PrivateSnapshotPublisher(Protocol):
+    async def publish_private(self, snapshot: dict) -> None: ...

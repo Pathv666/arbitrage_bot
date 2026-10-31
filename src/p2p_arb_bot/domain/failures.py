@@ -9,6 +9,7 @@ MESSAGES = {
     "connectivity": "No se pudo conectar al endpoint oficial",
     "tls": "Fallo TLS/certificado; no desactive verificación",
     "access_denied": "Acceso denegado; compruebe IP, región y permisos Read",
+    "read_permission": "Consulta no autorizada con permisos Read actuales; no habilite Trade/Withdraw",
     "authentication": "Autenticación rechazada; verifique credenciales Read localmente",
     "clock": "Timestamp rechazado; sincronice el reloj del equipo",
     "rate_limit": "Límite de peticiones; espere cooldown",
@@ -67,7 +68,7 @@ def check_api(code, *, success="0") -> None:
     if str(code) == success:
         return
     safe = str(code) if isinstance(code, (str, int)) else ""
-    category = "clock" if safe in {"-1021", "50102", "10002"} else (
+    category = "read_permission" if safe == "100004" else "clock" if safe in {"-1021", "50102", "10002"} else (
         "authentication" if safe in {"-2014", "-2015", "50111", "50113", "10003", "10004", "100001", "100004", "100413", "100419"}
         else "rate_limit" if safe in {"-1003", "50011", "10006", "100410"} else "api_error")
     raise CollectorError(category)
