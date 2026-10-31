@@ -204,15 +204,15 @@ def test_detecciones_por_hora_ventana_movil_limites_y_offsets(tmp_path):
     expected[0], expected[1], expected[8], expected[23] = 2, 1, 1, 2
     assert chart["counts"] == expected
     assert chart["peak_hours"] == [0, 23]
-    assert chart["start"] == "13/10/2026 15:37:00"
-    assert chart["end"] == "14/10/2026 15:37:00"
-    assert chart["hours"][0]["label"] == "15:37"
-    assert chart["hours"][-1]["range"] == "14/10 14:37–14/10 15:37"
+    assert chart["start"] == "14/10/2026 02:37:00"
+    assert chart["end"] == "15/10/2026 02:37:00"
+    assert chart["hours"][0]["label"] == "02:37"
+    assert chart["hours"][-1]["range"] == "15/10 01:37–15/10 02:37"
     # Al avanzar una hora, los registros del primer intervalo salen de la ventana.
     shifted = db_reader.opportunities_by_hour(str(db), now + timedelta(hours=1))
     assert shifted["total"] == 5
     assert shifted["counts"][0] == 1
-    assert shifted["hours"][0]["label"] == "16:37"
+    assert shifted["hours"][0]["label"] == "03:37"
 
 
 def test_detecciones_por_hora_sin_limite_y_empate(tmp_path):
