@@ -340,39 +340,6 @@ def optimize_routes(books: dict[str, list[Ad]], *, asset: str, fiat: str,
                 now=now,
                 ttl_s=costs.network_ttl_s,
             )
-            # Explain every network candidate for this directed route. This is
-            # diagnostic-only metadata: it never relaxes feasibility rules.
-            source_rows = {
-                n.network: n for n in networks
-                if n.exchange == buy_exchange and n.asset == asset
-            }
-            destination_rows = {
-                n.network: n for n in networks
-                if n.exchange == sell_exchange and n.asset == asset
-            }
-
-            def network_state(n: NetworkCost | None, *, source: bool) -> str:
-                if n is None:
-                    return "missing"
-                age = (now - n.timestamp).total_seconds() if n.timestamp.tzinfo else float("inf")
-                fresh = 0 <= age <= costs.network_ttl_s
-                enabled = n.withdraw_enabled if source else n.deposit_enabled
-                parts = [
-                    "withdraw" if source and enabled else
-                    "withdraw_off" if source else
-                    "deposit" if enabled else "deposit_off",
-                    "fresh" if fresh else "stale",
-                ]
-                if source:
-                    parts += [f"fee={n.withdraw_fee}", f"min={n.min_withdrawal}"]
-                return ",".join(parts)
-
-            network_diagnostics = tuple(
-                f"{name}: {buy_exchange}={network_state(source_rows.get(name), source=True)}; "
-                f"{sell_exchange}={network_state(destination_rows.get(name), source=False)}"
-                for name in sorted(set(source_rows) | set(destination_rows))
-            )
-
             matching = []
             for source in networks:
                 if source.exchange != buy_exchange or source.asset != asset or not source.withdraw_enabled:
