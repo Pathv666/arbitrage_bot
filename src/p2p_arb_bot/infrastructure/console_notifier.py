@@ -27,6 +27,9 @@ class ConsoleNotifier:
         # "ALL" es el sentinel interno para "sin filtrar por método".
         return "cualquier método" if method == "ALL" else method
 
+    async def notify_event(self, event) -> None:
+        self._console.print(Text(f"[{event.category}] {event.summary}"))
+
     async def notify_route(self, route: Route, detected_at: datetime) -> None:
         if self._beep:
             print("\a", end="", flush=True)

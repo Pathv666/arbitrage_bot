@@ -99,7 +99,7 @@ def test_defensive_public_response_does_not_treat_bad_schema_as_liquidity(monkey
         async def request(self, *args, **kwargs):
             return SimpleNamespace(status_code=200, json=lambda: {"success": True, "data": [{"adv": {"price": "NaN"}}]})
     monkeypatch.setattr(source.client, "_new_session", Session)
-    with pytest.raises(ValueError, match="ningún anuncio válido"):
+    with pytest.raises(RuntimeError, match="esquema inválido"):
         asyncio.run(source.fetch_ads(asset="USDT", fiat="VND", trade_type="BUY", pay_types=[]))
 
 

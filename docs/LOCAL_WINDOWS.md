@@ -167,3 +167,24 @@ Chỉ chuyển sang VPS khi:
 ## VPS deployment
 
 Workflow VPS hiện là **manual-only**. Không push nào lên `main` tự deploy V1. Chỉ bật lại auto-deploy sau khi local acceptance hoàn tất và cấu hình VPS được audit riêng.
+
+## Observabilidad de red y Telegram (después de 944beda)
+
+Scanner không in exception gốc từ API/transport. `status.json` và dashboard dùng
+mã lỗi cố định: `authentication`, `access_denied`, `clock`, `rate_limit`, `timeout`,
+`dns`, `tls`, `schema`. Không copy key, signed URL hoặc response lỗi vào chat.
+Bảng diagnostics hiển thị riêng withdraw ở Binance và deposit ở OKX cho từng
+network, freshness, fee/minimum và lý do reject. Thiếu fee không được coi là 0.
+Khi đã cấu hình API collector, lỗi collector không tự fallback sang manual snapshot
+của chính sàn đó. Các sàn không cấu hình API vẫn dùng snapshot manual đã xác minh.
+
+Telegram dùng cấu hình token/chat hiện có, không cần thay đổi API permission.
+Alerts theo transition: health lỗi/hồi phục, collector lỗi/hồi phục, route
+rejected/feasible, net edge qua threshold, deposit/withdraw thay đổi. Cùng trạng thái
+không gửi lặp; cooldown mặc định 180 giây cho mỗi topic; trạng thái cuối còn pending
+sẽ được gửi khi hết cooldown. Gating/cooldown của alert opportunity vẫn độc lập.
+Không bật Trade/Withdraw để xử lý lỗi Read. Với lỗi auth/IP/region, dừng phần phụ
+thuộc, kiểm tra cấu hình read-only trên laptop; scanner còn lại vẫn tiếp tục.
+
+Khi chạy test, dùng `ENV_PATH` trỏ tới một file rỗng trong thư mục tạm để test không
+load `.env` thật. Không gửi `.env` hoặc file log cũ chưa được lọc credential.

@@ -16,6 +16,7 @@ from urllib.parse import urlencode
 from curl_cffi.requests import AsyncSession
 
 from ..domain.execution import NetworkCost
+from ..domain.failures import safe_collector, check_http, check_api, public_failure
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ class BinanceNetworkCollector:
         if base_url:
             self.base_url = base_url.rstrip("/")
 
+    @safe_collector
     async def snapshot(self, asset: str) -> tuple[NetworkCost, ...]:
         timestamp = int(time.time() * 1000)
         query = urlencode({"recvWindow": self.recv_window, "timestamp": timestamp})
@@ -74,8 +76,7 @@ class BinanceNetworkCollector:
             response = await session.get(
                 url, headers={"X-MBX-APIKEY": self.api_key}, timeout=10
             )
-        if response.status_code != 200:
-            raise RuntimeError(f"Binance network metadata HTTP {response.status_code}")
+        check_http(response.status_code)
         payload = response.json()
         if not isinstance(payload, list):
             raise ValueError("Binance network metadata: respuesta inesperada")
@@ -91,8 +92,8 @@ class BinanceNetworkCollector:
             result.append(NetworkCost(
                 self.exchange, asset.upper(), network,
                 _as_bool(item.get("depositEnable"), field="depositEnable"), _as_bool(item.get("withdrawEnable"), field="withdrawEnable"),
-                _decimal(item.get("withdrawFee", "0"), field="withdrawFee"),
-                _decimal(item.get("withdrawMin", "0"), field="withdrawMin"),
+                _decimal(item["withdrawFee"], field="withdrawFee"),
+                _decimal(item["withdrawMin"], field="withdrawMin"),
                 now,
             ))
         if not result:
@@ -117,6 +118,7 @@ class OKXNetworkCollector:
         now = datetime.now(timezone.utc)
         return now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
+    @safe_collector
     async def snapshot(self, asset: str) -> tuple[NetworkCost, ...]:
         path = f"/api/v5/asset/currencies?ccy={asset.upper()}"
         timestamp = self._timestamp()
@@ -132,11 +134,9 @@ class OKXNetworkCollector:
         }
         async with AsyncSession() as session:
             response = await session.get(self.base_url + path, headers=headers, timeout=10)
-        if response.status_code != 200:
-            raise RuntimeError(f"OKX network metadata HTTP {response.status_code}")
+        check_http(response.status_code)
         payload = response.json()
-        if str(payload.get("code")) != "0":
-            raise RuntimeError(f"OKX network metadata code={payload.get('code')}")
+        check_api(payload.get("code"))
         now = datetime.now(timezone.utc)
         result = []
         for item in payload.get("data", []):
@@ -151,12 +151,12 @@ class OKXNetworkCollector:
                 # the maximum when a single fee is not present.
                 fee_raw = item.get("maxFee")
             if fee_raw in (None, ""):
-                fee_raw = item.get("minFee", "0")
+                fee_raw = item["minFee"]
             result.append(NetworkCost(
                 self.exchange, asset.upper(), network,
                 _as_bool(item.get("canDep"), field="canDep"), _as_bool(item.get("canWd"), field="canWd"),
                 _decimal(fee_raw, field="fee"),
-                _decimal(item.get("minWd", "0"), field="minWd"),
+                _decimal(item["minWd"], field="minWd"),
                 now,
             ))
         if not result:
@@ -176,6 +176,7 @@ class BingXNetworkCollector:
         if base_url:
             self.base_url = base_url.rstrip("/")
 
+    @safe_collector
     async def snapshot(self, asset: str) -> tuple[NetworkCost, ...]:
         params = {
             "coin": asset.upper(),
@@ -201,13 +202,10 @@ class BingXNetworkCollector:
                 },
                 timeout=10,
             )
-        if response.status_code != 200:
-            raise RuntimeError(f"BingX network metadata HTTP {response.status_code}")
+        check_http(response.status_code)
         payload = response.json()
-        if isinstance(payload, dict) and "code" in payload and int(payload.get("code", -1)) != 0:
-            raise RuntimeError(
-                f"BingX network metadata code={payload.get('code')}: {payload.get('msg', '')}"
-            )
+        if isinstance(payload, dict):
+            check_api(payload.get("code"))
         data = payload.get("data", payload) if isinstance(payload, dict) else payload
         if isinstance(data, dict):
             data = data.get("coins") or data.get("list") or data.get("data") or []
@@ -231,8 +229,8 @@ class BingXNetworkCollector:
                 self.exchange, asset.upper(), network,
                 _as_bool(item.get("depositEnable"), field="depositEnable"),
                 _as_bool(item.get("withdrawEnable"), field="withdrawEnable"),
-                _decimal(item.get("withdrawFee", "0"), field="withdrawFee"),
-                _decimal(item.get("withdrawMin", "0"), field="withdrawMin"),
+                _decimal(item["withdrawFee"], field="withdrawFee"),
+                _decimal(item["withdrawMin"], field="withdrawMin"),
                 now,
             ))
         if not result:
@@ -252,6 +250,7 @@ class BybitNetworkCollector:
         if base_url:
             self.base_url = base_url.rstrip("/")
 
+    @safe_collector
     async def snapshot(self, asset: str) -> tuple[NetworkCost, ...]:
         timestamp = str(int(time.time() * 1000))
         query = urlencode({"coin": asset.upper()})
@@ -270,11 +269,9 @@ class BybitNetworkCollector:
                 f"{self.base_url}/v5/asset/coin/query-info?{query}",
                 headers=headers, timeout=10,
             )
-        if response.status_code != 200:
-            raise RuntimeError(f"Bybit network metadata HTTP {response.status_code}")
+        check_http(response.status_code)
         payload = response.json()
-        if int(payload.get("retCode", -1)) != 0:
-            raise RuntimeError(f"Bybit network metadata retCode={payload.get('retCode')}")
+        check_api(payload.get("retCode"))
         rows = payload.get("result", {}).get("rows", [])
         coin = next((x for x in rows if str(x.get("coin", "")).upper() == asset.upper()), None)
         if not coin:
@@ -290,7 +287,7 @@ class BybitNetworkCollector:
                 self.exchange, asset.upper(), network,
                 str(item.get("chainDeposit")) == "1", withdraw_enabled,
                 _decimal(fee or "0", field="withdrawFee"),
-                _decimal(item.get("withdrawMin", "0"), field="withdrawMin"),
+                _decimal(item["withdrawMin"], field="withdrawMin"),
                 now,
             ))
         if not result:
@@ -313,8 +310,9 @@ class AutoNetworkCosts:
 
     async def snapshot(self) -> tuple[NetworkCost, ...]:
         now_mono = time.monotonic()
-        if self._cached and now_mono - self._last_refresh < self.refresh_s:
-            return self._merge(self.manual, self._cached)
+        manual = tuple(n for n in self.manual if n.exchange not in self.collectors)
+        if self._last_refresh and now_mono - self._last_refresh < self.refresh_s:
+            return self._merge(manual, self._cached)
 
         values: list[NetworkCost] = []
         health: dict[str, dict] = {}
@@ -330,9 +328,9 @@ class AutoNetworkCosts:
                     "source": "AUTHENTICATED_READ_ONLY_API",
                 }
             except Exception as exc:
-                logger.warning("%s network metadata failed: %s", exchange, exc)
+                logger.warning("%s network metadata: %s", exchange, public_failure(exc)["code"])
                 health[exchange] = {
-                    "status": "error", "reason": str(exc),
+                    "status": "error", **public_failure(exc),
                     "source": "AUTHENTICATED_READ_ONLY_API",
                 }
 
@@ -342,7 +340,7 @@ class AutoNetworkCosts:
         # refresh failure. Manual snapshots may still be used if explicitly set.
         self._cached = tuple(values)
         self._last_refresh = now_mono
-        return self._merge(self.manual, self._cached)
+        return self._merge(manual, self._cached)
 
     @staticmethod
     def _merge(manual: tuple[NetworkCost, ...], dynamic: tuple[NetworkCost, ...]) -> tuple[NetworkCost, ...]:

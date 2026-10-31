@@ -5,11 +5,21 @@
 <h3>{{ snapshot.target }} · tamaño {{ snapshot.requested_size }}</h3>
 <p>Última actualización: {{ snapshot.last_update }} · TTL configurado para cada consulta</p>
 <ul>{% for exchange, health in snapshot.health.items() %}<li>{{ exchange }}: {{ health.status }} {{ health.get('reason', '') }} ({{ health.get('ads', 0) }} anuncios)</li>{% endfor %}</ul>
+{% set collectors = snapshot.health.get('network_costs', {}).get('exchanges', {}) %}
+<ul>{% for exchange, collector in collectors.items() %}<li>Network API {{ exchange }}: {{ collector.status }} · {{ collector.get('code', '') }} · {{ collector.get('reason', '') }}</li>{% endfor %}</ul>
 <p>Mejor compra efectiva: {{ (snapshot.best_buy.effective_price | unidades) if snapshot.best_buy else 'Sin liquidez completa' }} · Mejor venta efectiva: {{ (snapshot.best_sell.effective_price | unidades) if snapshot.best_sell else 'Sin ruta factible' }}</p>
 {% for route in snapshot.routes %}
 <details {% if loop.first %}open{% endif %}>
 <summary>{{ route.buy_exchange }} → {{ route.sell_exchange }} · {{ route.network or 'Sin red confirmada' }} · {{ 'Factible' if route.feasible else 'Rechazada' }} · neto {{ route.net_edge_pct | float | round(3) }}%</summary>
 <p>{{ route.reason }} · Compra {{ route.buy.effective_price | unidades }} · Venta {{ route.sell.effective_price | unidades }} · Spread bruto {{ route.gross_spread_pct | float | round(3) }}% · Headline {{ route.headline_spread_pct | float | round(3) }}% · Antigüedad al calcular {{ route.quote_age_s }} s · {{ route.counterparties }} contrapartes</p>
+{% if route.network_diagnostics %}
+<div class="table-wrap"><table class="data"><thead><tr><th>Red</th><th>Origen {{ route.buy_exchange }}</th><th>Destino {{ route.sell_exchange }}</th><th>Diagnóstico</th></tr></thead><tbody>
+{% for diagnostic in route.network_diagnostics %}<tr>
+<td data-label="Red">{{ diagnostic.network or 'sin metadata' }}</td>
+<td data-label="Origen">presente={{ diagnostic.source_present }} · withdraw={{ diagnostic.source_withdraw_enabled }} · fresh={{ diagnostic.source_fresh }} · fee={{ diagnostic.source_fee }} · min={{ diagnostic.source_min_withdrawal }}</td>
+<td data-label="Destino">presente={{ diagnostic.destination_present }} · deposit={{ diagnostic.destination_deposit_enabled }} · fresh={{ diagnostic.destination_fresh }}</td>
+<td data-label="Diagnóstico">{{ diagnostic.reason }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
 <p>Restante compra: {{ route.buy.unfilled }} fiat · Restante venta: {{ route.sell.unfilled }} asset</p>
 <ul>{% for name, value in route.estimated_costs %}<li>{{ name }}: {{ value | unidades }} {{ route.fiat }}</li>{% endfor %}</ul>
 {% for side, fill in [('Compra', route.buy), ('Venta', route.sell)] %}
