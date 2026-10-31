@@ -194,3 +194,33 @@ def test_optimizer_total_counterparty_budget_is_shared_across_both_sides():
         risk=replace(RISK, max_counterparties=4),
     )[0]
     assert route.feasible and route.counterparties == 4
+
+
+def test_network_diagnostics_explain_directional_blockers():
+    source = NetworkCost(
+        "Binance", "USDT", "TRC20", True, True, D("1"), D("10"), NOW
+    )
+    destination = NetworkCost(
+        "OKX", "USDT", "TRC20", False, True, D("0"), D("0"), NOW
+    )
+    route = optimize(networks=(source, destination))[0]
+    assert route.feasible is False
+    assert route.network == ""
+    assert any(
+        "TRC20:" in line
+        and "Binance=withdraw,fresh,fee=1,min=10" in line
+        and "OKX=deposit_off,fresh" in line
+        for line in route.network_diagnostics
+    )
+
+
+def test_network_diagnostics_show_missing_side():
+    source = NetworkCost(
+        "Binance", "USDT", "BSC", True, True, D("0.1"), D("1"), NOW
+    )
+    destination = NetworkCost(
+        "OKX", "USDT", "ARBITRUM", True, True, D("0"), D("0"), NOW
+    )
+    route = optimize(networks=(source, destination))[0]
+    assert any("BSC:" in line and "OKX=missing" in line for line in route.network_diagnostics)
+    assert any("ARBITRUM:" in line and "Binance=missing" in line for line in route.network_diagnostics)
