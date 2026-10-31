@@ -155,7 +155,7 @@ def test_bybit_zero_user_id_falls_back_to_nickname():
     item = {
         "id": "ad1", "price": "26000", "lastQuantity": "1000",
         "minAmount": "100000", "maxAmount": "5000000",
-        "payments": ["14"], "userId": "", "nickName": "merchant-a",
+        "payments": ["14"], "userId": "0", "nickName": "merchant-a",
         "side": "1", "recentOrderNum": "100", "recentExecuteRate": "99",
         "paymentPeriod": "15"
     }
