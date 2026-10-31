@@ -147,3 +147,17 @@ def test_legacy_binance_keeps_requested_pair_metadata(monkeypatch):
     monkeypatch.setattr(source, "_post_with_retry", data)
     result = asyncio.run(source.fetch_ads(asset="BTC", fiat="VES", trade_type="BUY", pay_types=[]))
     assert result[0].asset == "BTC" and result[0].fiat == "VES"
+
+
+def test_bybit_zero_user_id_falls_back_to_nickname():
+    from datetime import datetime, timezone
+    src = BybitSource()
+    item = {
+        "id": "ad1", "price": "26000", "lastQuantity": "1000",
+        "minAmount": "100000", "maxAmount": "5000000",
+        "payments": ["14"], "userId": "", "nickName": "merchant-a",
+        "side": "1", "recentOrderNum": "100", "recentExecuteRate": "99",
+        "paymentPeriod": "15"
+    }
+    ad = src.parse(item, "BUY", "USDT", "VND", datetime.now(timezone.utc))
+    assert ad.advertiser_no == "merchant-a"
