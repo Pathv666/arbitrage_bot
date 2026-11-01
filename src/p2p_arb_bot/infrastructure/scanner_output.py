@@ -47,12 +47,21 @@ class ScannerStatus(StatusNotifier):
             "health": health, "routes": payloads, "best_route": feasible[0] if feasible else None,
             "best_buy": min((p["buy"] for p in payloads if p["buy"]["unfilled"] == "0" and p["buy"]["legs"]), key=lambda p: Decimal(p["effective_price"]), default=None),
             "best_sell": max((p["sell"] for p in feasible), key=lambda p: Decimal(p["effective_price"]), default=None),
-            "best_fast_sell": max(
+            "best_fast_sell_candidate": max(
                 (p for p in payloads if Decimal(p["fast_sell_fill_pct"]) > 0),
                 key=lambda p: (
                     Decimal(p["fast_sell_fill_pct"]),
                     Decimal(p["fast_sell_effective_price"]),
                 ),
+                default=None,
+            ),
+            "best_executable_arbitrage": max(
+                (
+                    p for p in feasible
+                    if Decimal(p["fast_sell_fill_pct"]) == Decimal("100")
+                    and Decimal(p["net_edge_pct"]) > 0
+                ),
+                key=lambda p: Decimal(p["net_edge_pct"]),
                 default=None,
             ),
         }
