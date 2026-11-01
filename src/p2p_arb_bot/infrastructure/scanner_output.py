@@ -59,7 +59,7 @@ class ScannerStatus(StatusNotifier):
                 (
                     p for p in feasible
                     if Decimal(p["fast_sell_fill_pct"]) == Decimal("100")
-                    and Decimal(p["net_edge_pct"]) > 0
+                    and Decimal(p["net_edge_pct"]) >= target.threshold_pct
                 ),
                 key=lambda p: Decimal(p["net_edge_pct"]),
                 default=None,
