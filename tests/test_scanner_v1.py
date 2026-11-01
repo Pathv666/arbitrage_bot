@@ -216,7 +216,9 @@ def test_status_keeps_fast_sell_candidate_when_no_profitable_executable_route(tm
                 if self.exchange == "OKX":
                     price = "26400" if side == "BUY" else "26350"
                 else:
-                    price = "25800" if side == "BUY" else "25760"
+                    # Both directions are intentionally loss-making:
+                    # Binance BUY -> OKX SELL loses, and OKX BUY -> Binance SELL loses.
+                    price = "26500" if side == "BUY" else "25760"
                 return [replace(ad(f"{self.exchange}-{side}", price, side=side, exchange=self.exchange),
                                 timestamp=datetime.now(timezone.utc))]
         service = ScannerService(
