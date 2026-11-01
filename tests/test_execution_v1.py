@@ -228,3 +228,29 @@ def test_network_diagnostics_show_missing_side():
     assert "red ausente en destino" in bsc.reason
     assert not arb.source_present and arb.destination_present
     assert "red ausente en origen" in arb.reason
+
+
+def test_fast_sell_metrics_use_blended_executable_price_not_headline_only():
+    book = {
+        "Binance": [ad("b", "25000")],
+        "OKX": [
+            ad("s1", "27000", cap="10000000", side="SELL", exchange="OKX"),
+            ad("s2", "26500", cap="50000000", side="SELL", exchange="OKX"),
+        ],
+    }
+    route = optimize(book, risk=replace(RISK, max_counterparties=3))[0]
+    assert route.fast_sell_best_price == D("27000")
+    assert route.fast_sell_effective_price < route.fast_sell_best_price
+    assert route.fast_sell_fill_pct == D("100")
+    assert route.fast_sell_price_impact_pct > 0
+
+
+def test_fast_sell_metrics_expose_partial_immediate_capacity():
+    book = {
+        "Binance": [ad("b", "25000")],
+        "OKX": [ad("s", "27000", cap="10000000", side="SELL", exchange="OKX")],
+    }
+    route = optimize(book)[0]
+    assert not route.feasible
+    assert route.fast_sell_best_price == D("27000")
+    assert route.fast_sell_fill_pct < D("100")
