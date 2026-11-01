@@ -233,3 +233,59 @@ def test_status_keeps_fast_sell_candidate_when_no_profitable_executable_route(tm
         assert snapshot["best_executable_arbitrage"] is None
         repo.close()
     asyncio.run(check())
+
+
+def test_scanner_alerts_only_best_executable_route(tmp_path):
+    class MultiSource(Source):
+        async def fetch_ads(self, **kwargs):
+            side = kwargs["trade_type"]
+            now = datetime.now(timezone.utc)
+            if self.exchange == "Binance":
+                price = "25000" if side == "BUY" else "24900"
+            elif self.exchange == "OKX":
+                price = "26000" if side == "SELL" else "26100"
+            else:
+                price = "25500" if side == "SELL" else "25600"
+            return [replace(ad(f"{self.exchange}-{side}", price, side=side, exchange=self.exchange),
+                            timestamp=now)]
+
+    async def check():
+        repo = SQLiteRepository(str(tmp_path/"db"))
+        notice = Notifier()
+        settings = ScannerSettings(risk=RISK, alert_min_scans=1, alert_min_seconds=0)
+        service = ScannerService(
+            {e: MultiSource(e) for e in ("Binance","OKX","Bybit")},
+            repo, ScannerStatus(str(tmp_path/"state")),
+            ManualNetworkCosts(networks()), settings, [notice],
+        )
+        target = WatchTarget("USDT","VND",(),D("47300000"),D("0.1"))
+        await service.run_cycle(target)
+        assert len(notice.alerts) == 1
+        assert notice.alerts[0].buy_exchange == "Binance"
+        assert notice.alerts[0].sell_exchange == "OKX"
+        assert notice.alerts[0].net_edge_pct > 0
+        repo.close()
+    asyncio.run(check())
+
+
+def test_scanner_does_not_alert_fast_sell_only_candidate(tmp_path):
+    async def check():
+        repo = SQLiteRepository(str(tmp_path/"db"))
+        notice = Notifier()
+        settings = ScannerSettings(risk=RISK, alert_min_scans=1, alert_min_seconds=0)
+        class Lossy(Source):
+            async def fetch_ads(self, **kwargs):
+                side = kwargs["trade_type"]
+                price = "26500" if side == "BUY" else "26000"
+                return [replace(ad(f"{self.exchange}-{side}", price, side=side, exchange=self.exchange),
+                                timestamp=datetime.now(timezone.utc))]
+        service = ScannerService(
+            {e: Lossy(e) for e in ("Binance","OKX")},
+            repo, ScannerStatus(str(tmp_path/"state")),
+            ManualNetworkCosts(networks()), settings, [notice],
+        )
+        target = WatchTarget("USDT","VND",(),D("47300000"),D("0.1"))
+        await service.run_cycle(target)
+        assert notice.alerts == []
+        repo.close()
+    asyncio.run(check())
