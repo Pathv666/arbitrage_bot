@@ -250,6 +250,10 @@ class Route:
     feasible: bool
     reason: str
     network_diagnostics: tuple[NetworkDiagnostic, ...] = ()
+    fast_sell_best_price: Decimal = ZERO
+    fast_sell_effective_price: Decimal = ZERO
+    fast_sell_fill_pct: Decimal = ZERO
+    fast_sell_price_impact_pct: Decimal = ZERO
 
 
 def _network_diagnostics(
@@ -423,12 +427,26 @@ def optimize_routes(books: dict[str, list[Ad]], *, asset: str, fiat: str,
                         for leg in buy.legs+sell.legs
                     ]
                     executable = (sell.total_fiat/size-1)*HUNDRED
+                    fast_sell_best_price = headline_sell[0].price if headline_sell else ZERO
+                    fast_sell_effective_price = sell.effective_price
+                    fast_sell_fill_pct = (
+                        sell.total_asset / transferred * HUNDRED
+                        if transferred > 0 else ZERO
+                    )
+                    fast_sell_price_impact_pct = (
+                        (fast_sell_best_price-fast_sell_effective_price)
+                        / fast_sell_best_price*HUNDRED
+                        if fast_sell_best_price > 0 and fast_sell_effective_price > 0
+                        else ZERO
+                    )
                     candidates_for_network.append(
                         Route(
                             buy_exchange, sell_exchange, asset, fiat, size, buy, sell,
                             headline, gross, executable, deductions, net, parties,
                             max(ages, default=ZERO), network.network if network else "",
                             not reason, reason, diagnostics,
+                            fast_sell_best_price, fast_sell_effective_price,
+                            fast_sell_fill_pct, fast_sell_price_impact_pct,
                         )
                     )
                 if candidates_for_network:
@@ -468,6 +486,8 @@ def optimize_routes(books: dict[str, list[Ad]], *, asset: str, fiat: str,
                             headline, ZERO, -HUNDRED, (), -HUNDRED,
                             buy.counterparties, max(ages, default=ZERO),
                             network.network if network else "", False, reason, diagnostics,
+                            headline_sell[0].price if headline_sell else ZERO,
+                            ZERO, ZERO, ZERO,
                         )
                     )
     return sorted(routes, key=lambda r: (r.feasible, r.net_edge_pct), reverse=True)
