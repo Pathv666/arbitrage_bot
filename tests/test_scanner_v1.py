@@ -83,6 +83,8 @@ def test_one_exchange_and_bingx_down_scanner_continues_with_gated_alert(tmp_path
         assert snapshot["health"]["BingX"]["status"] == "error"
         assert snapshot["health"]["Binance"]["status"] == "ok"
         assert snapshot["best_route"]["buy_exchange"] == "Binance"
+        assert snapshot["best_fast_sell"]["fast_sell_fill_pct"] == "100"
+        assert D(snapshot["best_fast_sell"]["fast_sell_effective_price"]) > 0
         rows = recent_routes(db)
         assert rows and rows[0]["seen_count"] == 3
         assert json.loads(rows[0]["payload"])["buy"]["legs"]
