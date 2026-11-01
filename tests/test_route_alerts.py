@@ -65,6 +65,10 @@ def assert_complete_route(text):
     assert "Compra Binance: 3 legs · 3 contrapartes" in text
     assert "Venta OKX: 2 legs · 2 contrapartes" in text
     assert "Red: TRC20" in text and "Margen neto estimado:" in text
+    assert "Mejor precio de venta rápida:" in text
+    assert "Precio de venta rápida ejecutable:" in text
+    assert "Venta inmediata cubierta: 100%" in text
+    assert "impacto de precio:" in text
     assert "antigüedad de quotes al detectar:" in text
     for side, count in (("buy", 3), ("sell", 2)):
         for index in range(1, count+1):

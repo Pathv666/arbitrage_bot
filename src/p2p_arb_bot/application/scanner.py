@@ -87,24 +87,35 @@ class ScannerService:
                 self.repository.save_route(route, now, health)
             except Exception:
                 logger.warning("No se pudo guardar ruta")
-            key = (*scope, route.buy_exchange, route.sell_exchange, route.network)
-            if not route.feasible or route.net_edge_pct < target.threshold_pct:
-                continue
+
+        executable = [
+            route for route in routes
+            if route.feasible
+            and route.fast_sell_fill_pct == 100
+            and route.net_edge_pct >= target.threshold_pct
+        ]
+        best = max(executable, key=lambda route: route.net_edge_pct, default=None)
+        if best is not None:
+            key = (*scope, best.buy_exchange, best.sell_exchange, best.network)
             active.add(key)
             first, count = self.streaks.get(key, (now, 0))
             count += 1
             self.streaks[key] = (first, count)
             old_alert = self.last_alert.get(key)
-            if count < self.settings.alert_min_scans or (now-first).total_seconds() < self.settings.alert_min_seconds:
-                continue
-            if old_alert and (now-old_alert).total_seconds() < self.settings.alert_cooldown_seconds:
-                continue
-            for notifier in self.notifiers:
-                try:
-                    await notifier.notify_route(route, now)
-                except Exception:
-                    logger.warning("Fallo aislado del notificador")
-            self.last_alert[key] = now
+            if (
+                count >= self.settings.alert_min_scans
+                and (now-first).total_seconds() >= self.settings.alert_min_seconds
+                and not (
+                    old_alert
+                    and (now-old_alert).total_seconds() < self.settings.alert_cooldown_seconds
+                )
+            ):
+                for notifier in self.notifiers:
+                    try:
+                        await notifier.notify_route(best, now)
+                    except Exception:
+                        logger.warning("Fallo aislado del notificador")
+                self.last_alert[key] = now
         for key in list(self.streaks):
             if key[:3] == scope and key not in active:
                 del self.streaks[key]
