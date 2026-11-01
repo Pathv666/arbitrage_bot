@@ -83,8 +83,10 @@ def test_one_exchange_and_bingx_down_scanner_continues_with_gated_alert(tmp_path
         assert snapshot["health"]["BingX"]["status"] == "error"
         assert snapshot["health"]["Binance"]["status"] == "ok"
         assert snapshot["best_route"]["buy_exchange"] == "Binance"
-        assert snapshot["best_fast_sell"]["fast_sell_fill_pct"] == "100"
-        assert D(snapshot["best_fast_sell"]["fast_sell_effective_price"]) > 0
+        assert snapshot["best_fast_sell_candidate"]["fast_sell_fill_pct"] == "100"
+        assert D(snapshot["best_fast_sell_candidate"]["fast_sell_effective_price"]) > 0
+        assert snapshot["best_executable_arbitrage"] is not None
+        assert D(snapshot["best_executable_arbitrage"]["net_edge_pct"]) > 0
         rows = recent_routes(db)
         assert rows and rows[0]["seen_count"] == 3
         assert json.loads(rows[0]["payload"])["buy"]["legs"]
@@ -194,3 +196,38 @@ def test_dynamic_network_snapshot_timestamp_not_future_rejected(monkeypatch, tmp
                                 D("1"), D("1"), datetime.now(timezone.utc)),)
 
     assert Provider()
+
+
+def test_status_keeps_fast_sell_candidate_when_no_profitable_executable_route(tmp_path):
+    async def check():
+        repo = SQLiteRepository(str(tmp_path/"db"))
+        settings = ScannerSettings(risk=RISK, alert_min_scans=1, alert_min_seconds=0)
+        status_path = tmp_path/"state"
+        sources = {
+            "Binance": Source("Binance"),
+            "OKX": Source("OKX"),
+        }
+        # Make BUY on OKX materially worse than SELL on Binance, while preserving
+        # valid immediate sell liquidity. This should surface a fast-sell candidate
+        # but no executable profitable arbitrage.
+        class LossySource(Source):
+            async def fetch_ads(self, **kwargs):
+                side = kwargs["trade_type"]
+                if self.exchange == "OKX":
+                    price = "26400" if side == "BUY" else "26350"
+                else:
+                    price = "25800" if side == "BUY" else "25760"
+                return [replace(ad(f"{self.exchange}-{side}", price, side=side, exchange=self.exchange),
+                                timestamp=datetime.now(timezone.utc))]
+        service = ScannerService(
+            {e: LossySource(e) for e in ("Binance","OKX")},
+            repo, ScannerStatus(str(status_path)), ManualNetworkCosts(networks()),
+            settings, [],
+        )
+        target = WatchTarget("USDT","VND",(),D("47300000"),D("0.1"))
+        await service.run_cycle(target)
+        snapshot = next(iter(json.loads(status_path.read_text())["targets"].values()))
+        assert snapshot["best_fast_sell_candidate"] is not None
+        assert snapshot["best_executable_arbitrage"] is None
+        repo.close()
+    asyncio.run(check())
